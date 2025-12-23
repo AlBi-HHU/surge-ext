@@ -1,0 +1,282 @@
+<img src="docs/imgs/surge-ext.png" alt="surge-ext logo" width="100" align="right"/>
+
+# surge-ext — Extended Chemical Structure Generator
+
+**surge-ext** is an extended, production-ready fork of the chemical structure generator [surge](https://github.com/StructureGenerator/surge). It enumerates all non-isomorphic constitutional isomers for a given molecular formula using canonical augmentation based on [nauty & traces](https://pallini.di.uniroma1.it/). The extensions introduced in surge-ext enable systematic exploration of chemical spaces involving **variable valences**, **charged species**, and **zwitterions**, with support for **parallel enumeration**.
+
+This software was developed in the context of a Bachelor's thesis by Federico Nellen at Heinrich-Heine University Düsseldorf, within the [Algorithmic Bioinformatics](https://albi.hhu.de) research group.
+
+## Table of Contents
+
+- [surge-ext — Extended Chemical Structure Generator](#surge-ext--extended-chemical-structure-generator)
+  - [Table of Contents](#table-of-contents)
+  - [Scientific scope and motivation](#scientific-scope-and-motivation)
+  - [Key features](#key-features)
+  - [Documentation](#documentation)
+  - [Installation](#installation)
+    - [Requirements](#requirements)
+    - [Automated build (recommended)](#automated-build-recommended)
+    - [Manual build](#manual-build)
+    - [Docker usage](#docker-usage)
+  - [Usage](#usage)
+  - [Command-line interface](#command-line-interface)
+  - [Variable valence specification](#variable-valence-specification)
+  - [Variable-valence enumeration model](#variable-valence-enumeration-model)
+  - [Comparison to upstream surge](#comparison-to-upstream-surge)
+  - [Roadmap](#roadmap)
+  - [Related tools and ecosystem](#related-tools-and-ecosystem)
+    - [Open-source structure generators](#open-source-structure-generators)
+    - [Performance context](#performance-context)
+  - [References](#references)
+  - [Cite this software](#cite-this-software)
+    - [Citing the upstream algorithm](#citing-the-upstream-algorithm)
+
+---
+
+## Scientific scope and motivation
+
+The exhaustive generation of constitutional isomers from a given formula is central to cheminformatics and algorithmic bioinformatics. Structure generators underpin tasks in QSPR/QSAR modeling, virtual screening of chemical libraries, computer-assisted structure elucidation (CASE), and materials design. In astrochemistry and theoretical spectroscopy, complete coverage of the structural search space enables robust downstream workflows: from deriving plausible formulas via spectral analysis, through enumerating all non-isomorphic isomers, to quantum-chemical optimization and targeted laboratory validation.
+
+Within graph-based chemical modeling, molecules are represented as labeled graphs whose vertices encode elements and charges, and edges encode bond multiplicities. Canonical augmentation and strong pruning avoid duplication by generating only class representatives under automorphism. The original _surge_ leverages nauty/traces to achieve state-of-the-art performance for fixed-valence, neutral molecules. However, many relevant systems require handling of multiple valence states and formal charges, including internal charge-separated (zwitterionic) species.
+
+**surge-ext** extends the scope while preserving rigorous guarantees:
+
+- Systematic enumeration across multiple valence assignments per element (variable valences).
+- Support for ionic and zwitterionic species.
+- Parallel scheduling of variable-valence splits for large combinatorial spaces.
+- Completeness and non-isomorphism guarantees maintained across the extended chemical space.
+
+---
+
+## Key features
+
+- Exhaustive enumeration of non-isomorphic constitutional isomers.
+- Support for variable valences (e.g. S, P, halogens).
+- Enumeration of ions and internal charge-separated (zwitterionic) structures.
+- Parallelized variable-valence enumeration for large search spaces.
+- Deterministic output generation (SMILES, SDF, alphabetical).
+- Modular plugin system for customized generators.
+- Reproducible builds via CMake and Docker.
+
+---
+
+## Documentation
+
+- **Extensions and new functionality**: [docs/surge-ext_extensions.md](docs/surge-ext_extensions.md)
+- **Original surge (v1.0) functionality**: [docs/surge1_0.md](docs/surge1_0.md)
+
+Users are encouraged to consult both documents for a complete understanding of the algorithmic foundations and extensions.
+
+---
+
+## Installation
+
+### Requirements
+
+For native builds:
+
+- C compiler (GCC or Clang)
+- CMake
+- Linux (Debian/Ubuntu recommended) or macOS
+
+The build process automatically downloads and compiles **nauty**.
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake
+```
+
+Alternatively, Docker can be used for a fully isolated and reproducible environment.
+
+---
+
+### Automated build (recommended)
+
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+The interactive build script provides:
+
+1. Native build (Release mode, output in `build/surge-ext`)
+2. Docker image build (`surge-ext`)
+
+---
+
+### Manual build
+
+```bash
+chmod +x setup.sh
+./setup.sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -- -j$(nproc)
+```
+
+---
+
+### Docker usage
+
+```bash
+docker build -t surge-ext .
+docker run --rm surge-ext -S C10H16O
+```
+
+---
+
+## Usage
+
+Native binary:
+
+```bash
+./build/surge-ext -S C8H6N2
+```
+
+Docker container:
+
+```bash
+docker run --rm surge-ext -S C8H6N2
+```
+
+---
+
+## Command-line interface
+
+```text
+Usage: surge-ext [-oFILE] [-z] [-u|-A|-S] [-T] [-V] [-Z] [-I] [-j#]
+                 [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula
+```
+
+Known elements: C, B, N, P, O, S, H, F, Cl, Br, I
+
+Selected options:
+
+- `-S` Output SMILES
+- `-A` Alphabetical format
+- `-u` Count only (no output)
+- `-V` Enable variable valences
+- `-Z` Enumerate zwitterions (requires `-V`)
+- `-I` Allow ions (requires `-V`)
+- `-j#` Parallel valence splits
+- `-P` Enforce planarity
+- `-o` Output file
+
+A full description of all constraints and structural filters is provided in the manual.
+
+---
+
+## Variable valence specification
+
+Elements with multiple allowed valences and charges can be specified explicitly using:
+
+```text
+Element(valence.sign.charge)
+```
+
+Example:
+
+```bash
+surge-ext -u S(6.0.0)2H2O3
+```
+
+Multiple valence variants of the same element may be combined in a single formula.
+
+---
+
+## Variable-valence enumeration model
+
+When the `-V` flag is enabled, surge-ext enumerates all valid distributions of the specified valence states across the atoms in the input formula. For each distribution, the full set of non-isomorphic constitutional isomers is generated independently, ensuring completeness across the combined chemical space.
+
+An overview of the enumeration workflow is shown below:
+
+![Variable valence enumeration workflow](docs/imgs/surge_ext_generation.png)
+
+---
+
+## Comparison to upstream surge
+
+| Feature              | surge          | surge-ext |
+| -------------------- | -------------- | --------- |
+| Fixed valence        | ✔              | ✔         |
+| Variable valence     | ✘              | ✔         |
+| Ions                 | ✘              | ✔         |
+| Zwitterions          | ✘              | ✔         |
+| Parallel enumeration | ✘              | ✔         |
+| Docker support       | non functional | ✔         |
+
+---
+
+## Roadmap
+
+Planned developments include:
+
+- Extension to additional elements (period ≥ 4)
+- Validation against large chemical databases (e.g. PubChem)
+- Post-processing for tautomer and resonance equivalence
+- Integration with RDKit and related toolkits
+- Expanded plugin documentation
+- Graphical user interface
+
+---
+
+## Related tools and ecosystem
+
+### Open-source structure generators
+
+- **MOLGEN** — Established standard with extensive constraint support (closed-source, limited availability)
+- **MAYGEN** — Open-source generator using orderly generation
+- **enu** — Includes stereoisomer enumeration
+- **Sherlock** — NMR-guided structure elucidation
+
+### Performance context
+
+surge achieves state-of-the-art speed (orders of magnitude faster than MOLGEN) through canonical augmentation. surge-ext preserves this efficiency while extending coverage to variable-valence and charged species.
+
+---
+
+## References
+
+- Original surge repository: [https://github.com/StructureGenerator/surge](https://github.com/StructureGenerator/surge)
+- Nauty & Traces: [https://pallini.di.uniroma1.it/](https://pallini.di.uniroma1.it/)
+- surge publication: McKay, B. D., Yirik, M. A., & Steinbeck, C. (2022). Surge: a fast open-source chemical graph generator. _Journal of Cheminformatics_, 14(1), 24. [https://doi.org/10.1186/s13321-022-00604-9](https://doi.org/10.1186/s13321-022-00604-9)
+
+## Cite this software
+
+If you use surge-ext in academic work, please cite it as software and acknowledge its relationship to the original surge generator.
+
+Nellen, F. (2025). surge-ext: An extended chemical structure generator with variable valence chemistry and zwitterion support (Version 2.0) [GitHub](https://github.com/AlBi-HHU/surge-ext)
+
+```bibtex
+@software{nellen_surge_ext_2025,
+  author       = {Nellen, Federico},
+  title        = {surge-ext: Extended chemical structure generation with variable valences, ions, and zwitterions},
+  year         = {2025},
+  institution  = {Heinrich-Heine University Düsseldorf},
+  url          = {https://github.com/AlBi-HHU/surge-ext},
+  note         = {Extended fork of the surge chemical structure generator}
+}
+```
+
+### Citing the upstream algorithm
+
+If your work relies on the underlying generation algorithm, please also cite the original surge publication:
+
+```bibtex
+@Article{McKay2022,
+author={McKay, Brendan D.
+and Yirik, Mehmet Aziz
+and Steinbeck, Christoph},
+title={Surge: a fast open-source chemical graph generator},
+journal={Journal of Cheminformatics},
+year={2022},
+month={Apr},
+day={23},
+volume={14},
+number={1},
+pages={24},
+abstract={Chemical structure generators are used in cheminformatics to produce or enumerate virtual molecules based on a set of boundary conditions. The result can then be tested for properties of interest, such as adherence to measured data or for their suitability as drugs. The starting point can be a potentially fuzzy set of fragments or a molecular formula. In the latter case, the generator produces the set of constitutional isomers of the given input formula. Here we present the novel constitutional isomer generator surge based on the canonical generation path method. Surge uses the nauty package to compute automorphism groups of graphs. We outline the working principles of surge and present benchmarking results which show that surge is currently the fastest structure generator. Surge is available under a liberal open-source license.},
+issn={1758-2946},
+doi={10.1186/s13321-022-00604-9},
+url={https://doi.org/10.1186/s13321-022-00604-9}
+}
+```
