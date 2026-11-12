@@ -158,6 +158,8 @@ Selected options:
 - `-Z` Enumerate zwitterions (requires `-V`)
 - `-I` Allow ions (requires `-V`)
 - `-j#` Parallel valence splits
+- `-Xstate` Exclude an exact element state (repeatable)
+- `-Ffile` Read excluded states from a file (repeatable)
 - `-P` Enforce planarity
 - `-o` Output file
 
@@ -180,6 +182,41 @@ surge-ext -u S(6.0.0)2H2O3
 ```
 
 Multiple valence variants of the same element may be combined in a single formula.
+
+### Excluding element states
+
+Exclude individual states before variable-valence enumeration with `-X`:
+
+```bash
+./build/surge-ext -V -S -X 'C(2.0.0)' C4H6O
+```
+
+For a longer list, use `-F exclusions.txt`. Each nonempty line contains one
+exact state token; surrounding whitespace, blank lines, and `#` comments are
+allowed. For example:
+
+```text
+# Do not enumerate these states
+C(2.0.0)
+N(4.2.1)  # positive nitrogen
+```
+
+```bash
+./build/surge-ext -V -S -F exclusions.txt C4H6NO
+```
+
+Both options accept attached or separate arguments (`'-XC(2.0.0)'` or
+`-X 'C(2.0.0)'`, `-Fexclusions.txt` or `-F exclusions.txt`). Repeated `-X` and
+`-F` options combine their exclusions; duplicates are harmless. Quote state
+tokens containing parentheses in your shell.
+
+Matching is exact: `-X C` excludes the ordinary tetravalent carbon state, not
+all carbon states. With `-V`, bare `C` in the formula still supplies carbon atoms
+that can be assigned to the remaining allowed states. Explicit variants in the
+formula cannot be excluded. Without `-V`, requesting any excluded state,
+including bare `C`, is an error. Unknown exclusions, unreadable files, and
+excluding every available state of an element needed by the formula are errors.
+Charge restrictions from `-I`/`-Z` still apply.
 
 ---
 

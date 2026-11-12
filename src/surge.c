@@ -27,10 +27,10 @@
 
 #ifdef ZLIB
 #define USAGE \
-  "[-oFILE] [-z] [-u|-A|-S] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
+  "[-oFILE] [-z] [-u|-A|-S] [-V] [-Xstate] [-Ffile] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
 #else
 #define USAGE \
-  "[-oFILE] [-u|-A|-S] [-V] [-Z[#]] [-j#] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
+  "[-oFILE] [-u|-A|-S] [-V] [-Z[#]] [-j#] [-Xstate] [-Ffile] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
 #endif
 
 #define HELPUSECMD
@@ -74,6 +74,8 @@
 "     9 = no atom in more than one ring of length 3 or 4\n" \
 "  -v     Write more information to stderr\n" \
 "  -V     Enable variable valences\n" \
+"  -Xstate Exclude an exact element state (repeatable; quote parentheses)\n" \
+"  -Ffile  Read excluded states, one per line; blank lines and # comments allowed\n" \
 "  -j#   Use # threads for variable valence (default 1, max 32)\n" \
 "  -m#/#  Do only a part. The two numbers are res/mod where 0<=res<mod.\n" \
 "  -oFILE Write the output to the given file rather than to stdout.\n" \
@@ -203,7 +205,7 @@ int main(int argc, char *argv[])
 
     calculate_number_of_elements(&ctx);
 
-    surge_parse_cli(argc, argv, &ctx);
+    if (surge_parse_cli(argc, argv, &ctx)) return 1;
 
     surge_capture_limit_seed(&ctx);
     surge_snapshot_element_runtime(&ctx);

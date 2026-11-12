@@ -82,6 +82,11 @@ void decode_formula(SurgeCtx *ctx)
         cnt = count[i];
         if (cnt > 0)
         {
+            if (IN.excluded[i]) {
+                fprintf(stderr, ">E surge : formula requests excluded state '%s'\n",
+                        element[i].inputname);
+                surge_fatal(">E surge : formula conflicts with exclusions\n");
+            }
             if (is_hydrogen(i)) {
                 FM.hydrogens = cnt;
             }

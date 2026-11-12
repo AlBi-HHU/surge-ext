@@ -114,6 +114,7 @@ typedef struct {
 typedef struct {
     char *formula; /* required */
     char *extra1; /* payload after -G (may be NULL) */
+    bool excluded[MAXELEMENTS]; /* exact element states excluded by -X/-F */
 } InputCfg;
 
 /* 3) Geng limits (caps and ranges) */

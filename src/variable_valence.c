@@ -84,6 +84,10 @@ static void parse_formula_counts(SurgeCtx *ctx, int *counts)
         }
 
         int idx = elementindex(ctx, namebuf);
+        if (cnt > 0 && IN.excluded[idx] && strchr(namebuf, '(')) {
+            fprintf(stderr, ">E surge : formula requests excluded state '%s'\n", namebuf);
+            surge_fatal(">E surge : formula conflicts with exclusions\n");
+        }
         counts[idx] += cnt;
     }
 }
@@ -118,6 +122,11 @@ static int build_variable_families(const SurgeCtx *ctx, const int *base_counts,
             if (!element[j].name) {
                 continue;
             }
+            /* Bare input supplies the atom count even if its state is excluded. */
+            if (strcmp(element[j].name, element[i].name) == 0 &&
+                strcmp(element[j].inputname, element[j].name) == 0)
+                bare_idx = j;
+            if (IN.excluded[j]) continue;
             /* skip charged elements unless -I or -Z is given */
             if (!F.ions && !F.zw_enable) {
                 if (element[j].charge != 0) {
@@ -129,13 +138,9 @@ static int build_variable_families(const SurgeCtx *ctx, const int *base_counts,
                     fam[fam_count].var_idx[k] = j;
                     ++k;
                 }
-                if (strcmp(element[j].inputname, element[j].name) == 0) {
-                    bare_idx = j;
-                }
             }
         }
-        if (k <= 1 || bare_idx < 0) {
-            /* not a variable family or no bare variant */
+        if (bare_idx < 0) {
             continue;
         }
 
@@ -144,6 +149,11 @@ static int build_variable_families(const SurgeCtx *ctx, const int *base_counts,
             /* no bare atoms present in the input → nothing to distribute */
             continue;
         }
+        if (k == 0) {
+            fprintf(stderr, ">E surge : no allowed states remain for '%s'\n", element[i].name);
+            surge_fatal(">E surge : exclusions remove every available state\n");
+        }
+        if (k == 1 && fam[fam_count].var_idx[0] == bare_idx) continue;
 
         /* record this family */
         strncpy(fam[fam_count].name, element[i].name, sizeof fam[fam_count].name - 1);

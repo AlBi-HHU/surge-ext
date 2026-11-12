@@ -303,6 +303,54 @@ void surge_reset_formula_workspace(SurgeCtx *ctx)
     ctx->fm.needcoordtest = false;
 }
 
+static void exclude_state(SurgeCtx *ctx, const char *token,
+                          const char *source, unsigned long line)
+{
+    for (int i = 0; i < FM.numelements; ++i) {
+        if (strcmp(element[i].inputname, token) == 0) {
+            IN.excluded[i] = true;
+            return;
+        }
+    }
+    fprintf(stderr, ">E surge : unknown excluded state '%s' (%s:%lu)\n",
+            token, source, line);
+    surge_fatal(">E surge : invalid exclusion\n");
+}
+
+static void read_exclusions(SurgeCtx *ctx, const char *path)
+{
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        fprintf(stderr, ">E surge : cannot open exclusion file '%s': %s\n",
+                path, strerror(errno));
+        surge_fatal(">E surge : cannot read exclusions\n");
+    }
+    char line[512];
+    unsigned long number = 0;
+    while (fgets(line, sizeof line, file)) {
+        ++number;
+        if (!strchr(line, '\n') && !feof(file)) {
+            fprintf(stderr, ">E surge : exclusion line too long (%s:%lu)\n", path, number);
+            fclose(file);
+            surge_fatal(">E surge : invalid exclusion file\n");
+        }
+        char *comment = strchr(line, '#');
+        if (comment) *comment = '\0';
+        char *start = line;
+        while (isspace((unsigned char)*start)) ++start;
+        char *end = start + strlen(start);
+        while (end > start && isspace((unsigned char)end[-1])) --end;
+        *end = '\0';
+        if (*start) exclude_state(ctx, start, path, number);
+    }
+    int failed = ferror(file);
+    fclose(file);
+    if (failed) {
+        fprintf(stderr, ">E surge : error reading exclusion file '%s'\n", path);
+        surge_fatal(">E surge : error reading exclusion file\n");
+    }
+}
+
 bool surge_parse_cli(int argc, char **argv, SurgeCtx *ctx) {
     int argi = 1, positional = 0;
     while (argi < argc) {
@@ -323,6 +371,21 @@ bool surge_parse_cli(int argc, char **argv, SurgeCtx *ctx) {
         while (*p) {
             char sw = *p++;
             switch (sw) {
+                case 'X':
+                case 'F': {
+                    const char *spec = p;
+                    if (!*p && argi < argc && argv[argi][0] != '-')
+                        spec = argv[argi++];
+                    if (!*spec) {
+                        fprintf(stderr, ">E surge : -%c expects %s\n", sw,
+                                sw == 'X' ? "a state" : "a file path");
+                        surge_fatal(">E surge : missing exclusion argument\n");
+                    }
+                    if (sw == 'X') exclude_state(ctx, spec, "-X", 0);
+                    else read_exclusions(ctx, spec);
+                    p = (char*)"";
+                    break;
+                }
                 case 'G': { /* -G<extra>, or next token */
                     if (*p=='\0' && argi < argc) { IN.extra1 = argv[argi++]; }
                     else { IN.extra1 = p; }
