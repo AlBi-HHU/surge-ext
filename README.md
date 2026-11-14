@@ -122,6 +122,24 @@ docker build -t surge-ext .
 docker run --rm surge-ext -S C10H16O
 ```
 
+The multi-stage image includes gzip support. Build tools are not included in
+the runtime image.
+Both nauty and surge-ext use portable compiler settings rather than instructions
+specific to the build machine.
+
+Mount your working directory at `/data` to read an exclusion list and save output
+on the host:
+
+```bash
+docker run --rm -v "$PWD:/data" surge-ext \
+  -V -S -F exclusions.txt -o results.smi C4H6O
+```
+
+For native CMake builds, host-specific Release optimizations remain enabled by
+default. Set `-DNATIVE_OPTIMIZATIONS=OFF` to disable them. External nauty builds
+can be selected with `-DNAUTY_DIR=/path/to/nauty` and
+`-DNAUTY_LIB=/path/to/nauty/nautyW1.a`.
+
 ---
 
 ## Usage
@@ -137,6 +155,29 @@ Docker container:
 ```bash
 docker run --rm surge-ext -S C8H6N2
 ```
+
+Molecular records go to stdout (or the file selected by `-o`). The startup
+banner, progress bars, verbose diagnostics, and final summary go to stderr, so
+redirecting stdout produces a clean result file:
+
+```bash
+./build/surge-ext -V -S C4H6O > results.smi
+```
+
+Variable-valence progress counts both completed workers and splits rejected
+before spawning. It always renders a final completion update; no merge bar is
+shown for empty or count-only output. If no variable families need expansion,
+the single-run fast path prints only the final summary. SDF output preserves
+formal charges using `M  CHG` records. With a zlib-enabled build, `-z` compresses
+the output, including parallel variable-valence runs.
+
+Interactive terminals use a compact header, progress bars sized to the terminal,
+and a labeled result summary with wall-clock elapsed time. Colors are automatic;
+set `NO_COLOR=1` or `CLICOLOR=0` to disable them. `TERM=dumb` and redirected stderr
+use plain text with no cursor controls. Redirected logs retain the `>Z` summary
+fields for scripts, and progress updates are limited to once per second plus
+the initial and final states. Skipped worker diagnostics stay in the error log
+unless `-v` is enabled; input errors are always shown directly.
 
 ---
 
