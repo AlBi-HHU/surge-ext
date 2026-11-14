@@ -1,13 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
 project(surge-ext VERSION 2.0 LANGUAGES C)
 
-# Compiler flags
-set(CMAKE_C_FLAGS_RELEASE "-march=native -mtune=native -O3")
-set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
+# Keep host-specific instructions optional so container images are portable.
+option(NATIVE_OPTIMIZATIONS "Optimize Release builds for the build host CPU" ON)
+if (NATIVE_OPTIMIZATIONS)
+    add_compile_options(
+        $<$<CONFIG:Release>:-march=native>
+        $<$<CONFIG:Release>:-mtune=native>
+    )
+endif()
 
 # NAUTY package
-set(NAUTY_DIR   "${CMAKE_SOURCE_DIR}/nauty")
-set(NAUTY_LIB   "${NAUTY_DIR}/nautyW1.a")
+set(NAUTY_DIR "${CMAKE_SOURCE_DIR}/nauty" CACHE PATH "Path to nauty headers")
+set(NAUTY_LIB "${NAUTY_DIR}/nautyW1.a" CACHE FILEPATH "Path to the nauty library")
 include_directories(${NAUTY_DIR})
 
 # ZLIB option
