@@ -20,6 +20,8 @@ void vv_spawn_child_for_formula(SurgeCtx *ctx, VVContext *vvc, const char *deriv
     if (!part_path) surge_fatal(">E surge : out of memory creating part file\n");
     vvc->use_pipes = 0;
 
+    /* Do not let a worker's exit() flush inherited output a second time. */
+    if (fflush(NULL) == EOF) surge_fatal(">E surge : error flushing output before fork\n");
     pid_t pid = fork();
     if (pid < 0) {
         vv_logf(ctx, "ERROR fork() failed for formula=\"%s\"", derived);
@@ -28,6 +30,7 @@ void vv_spawn_child_for_formula(SurgeCtx *ctx, VVContext *vvc, const char *deriv
 
     if (pid == 0) {
         /* ---- CHILD ---- */
+        F.vv_worker = true;
         vv_logf(ctx, "CHILD start child_seq=%d via=%s target=%s formula=\"%s\"",
             vvc->child_count, part_path, (O.filename ? O.filename : "-"), derived);
 
@@ -164,7 +167,7 @@ void vv_wait_one(SurgeCtx *ctx, VVContext *vvc) {
 
 void vv_wait_all(SurgeCtx *ctx, VVContext *vvc) {
     while (vvc->inflight > 0) vv_wait_one(ctx, vvc);
-    vv_progress_done(vvc);
+    vv_progress_done(ctx, vvc);
 }
 
 char *vv_make_stats_path(const char *part_path) {

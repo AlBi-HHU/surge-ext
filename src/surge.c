@@ -96,6 +96,7 @@
 #include "pipeline.h"
 #include "utils.h"
 #include "variable_valence.h"
+#include "vv_progress.h"
 #ifdef ZLIB
 #include "zlib.h"
 #endif
@@ -179,18 +180,7 @@ program with WORDSIZE=64 if you really need to). */
 int main(int argc, char *argv[])
 {
 
-    fprintf(stdout,
-"    _______.  __    __  .______        _______  _______                __________   ___ .___________.\n"
-      "   /       | |  |  |  | |   _  \\      /  _____||   ____|              |   ____\\  \\ /  / |           |\n"
-      "  |   (----` |  |  |  | |  |_)  |    |  |  __  |  |__       ______    |  |__   \\  V  /  `---|  |----`\n"
-      "    \\   \\    |  |  |  | |      /     |  | |_ | |   __|     |______|   |   __|   >   <       |  |     \n"
-      ".----)   |   |  `--'  | |  |\\  \\----.|  |__| | |  |____               |  |____ /  .  \\      |  |     \n"
-      "|_______/     \\______/  | _| `._____| \\______| |_______|              |_______/__/ \\__\\     |__|     \n"
-"\n"
-    );
-    fprintf(stdout,"Chemical structure generator version 2.0\n");
-    fprintf(stdout,"Extended with variable valences, zwitterions and ions\n");
-    fprintf(stdout,"\n");
+    surge_print_header();
 
     SurgeCtx ctx;
     surge_ctx_init(&ctx);
@@ -223,7 +213,11 @@ int main(int argc, char *argv[])
     /* ---- run ---- */
     surge_set_thread_ctx(&ctx);
 
-    double t1 = CPUTIME, t2;
+    if (surge_terminal_live()) {
+        surge_terminal_detail("Formula", ctx.in.formula);
+        fputc('\n', stderr);
+    }
+    double t1 = vv_now_s(), t2;
 
     if (ctx.flags.vvswitch) {
         run_with_variable_valences(&ctx);
@@ -240,7 +234,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    t2 = CPUTIME;
+    t2 = vv_now_s();
 
     surge_print_summary(&ctx, t1, t2);
 

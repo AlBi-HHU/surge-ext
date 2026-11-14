@@ -80,4 +80,14 @@ void surge_dump_context(FILE *fp, const SurgeCtx *ctx);
 
 void surge_print_error_log(void);
 
+/* Terminal presentation only. Molecular output must never use these helpers. */
+bool surge_terminal_live(void);
+const char *surge_terminal_style(const char *ansi);
+int surge_terminal_width(void);
+void surge_print_header(void);
+void surge_terminal_detail(const char *label, const char *value);
+void surge_terminal_progress(const char *label, double percent,
+                             const char *primary, const char *secondary, bool complete);
+void surge_terminal_clear(void);
+
 #endif //SURGE_VV_UTILS_H

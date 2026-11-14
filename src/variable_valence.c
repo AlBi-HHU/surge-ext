@@ -189,14 +189,24 @@ static void vv_emit_and_run(SurgeCtx *ctx, VVContext *vv_ctx)
     if (F.zw_enable && (pos_charge != neg_charge )) {
         ST.skipped ++;
         vv_ctx->skipped++;
-        if (F.verbose) printf(">[DEBUG] Skipping: charge imbalance %d vs %d\n", pos_charge, neg_charge);
+        vv_ctx->finished++;
+        if (F.verbose) {
+            surge_terminal_clear();
+            fprintf(stderr, ">[DEBUG] Skipping: charge imbalance %d vs %d\n", pos_charge, neg_charge);
+        }
+        vv_progress_render(ctx, vv_ctx, NULL);
         return;
     }
     // ions should only be negative or positive
     if (F.ions && (pos_charge > 0 && neg_charge > 0)) {
         ST.skipped ++;
         vv_ctx->skipped++;
-        if (F.verbose) printf(">[DEBUG] Skipping: both positive and negative charges in ion mode\n");
+        vv_ctx->finished++;
+        if (F.verbose) {
+            surge_terminal_clear();
+            fprintf(stderr, ">[DEBUG] Skipping: both positive and negative charges in ion mode\n");
+        }
+        vv_progress_render(ctx, vv_ctx, NULL);
         return;
     }
 
@@ -343,5 +353,4 @@ void run_with_variable_valences(SurgeCtx *ctx)
 
     vv_merge_parts_into_final(ctx, &vv_ctx);
 
-    vv_progress_done(&vv_ctx);
 }

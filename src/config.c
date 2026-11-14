@@ -558,12 +558,41 @@ void surge_print_summary(SurgeCtx *ctx, double t1, double t2) {
     SURGEPLUGIN_SUMMARY
 #endif
 
-    fprintf(stderr, ">INFO: see error log at surge_errors.log\n");
-
-    fprintf(stderr, ">Z %s %llu -> %llu -> %llu (skipped=%llu) in %.2f sec\n",
-            (F.uswitch ? "generated" : "wrote"),
-            ST.gengout, ST.vcolgout, ST.multigout, ST.skipped,
-            t2 - t1);
+    if (surge_terminal_live()) {
+        char value[512];
+        counter produced = F.outlevel == 1 ? ST.genggood :
+                           F.outlevel == 2 ? ST.vcolgout : ST.multigout;
+        const char *kind = F.outlevel == 1 ? "skeletons" :
+                           F.outlevel == 2 ? "assignments" : "structures";
+        fprintf(stderr, "\n%sComplete%s\n", surge_terminal_style("\033[1;32m"),
+                surge_terminal_style("\033[0m"));
+        snprintf(value, sizeof value, "%llu %s %s", produced, kind,
+                 F.uswitch ? "counted" : "written");
+        surge_terminal_detail("Result", value);
+        snprintf(value, sizeof value, "%.2f s", t2 - t1);
+        surge_terminal_detail("Elapsed", value);
+        if (surge_terminal_width() >= 60) {
+            snprintf(value, sizeof value, "%llu skeletons -> %llu labels", ST.gengout, ST.vcolgout);
+            surge_terminal_detail("Pipeline", value);
+        }
+        if (ST.skipped) {
+            snprintf(value, sizeof value, "%llu valence splits", ST.skipped);
+            surge_terminal_detail("Skipped", value);
+        }
+        if (!F.uswitch) {
+            const char *format = F.outlevel < 4 ? "graph" : F.smiles ? "SMILES" :
+                                 F.alphabetic ? "alphabetical" : "SDF";
+            snprintf(value, sizeof value, "%s%s -> %s", format, F.gzip ? "/gzip" : "",
+                     O.filename ? O.filename : "stdout");
+            surge_terminal_detail("Output", value);
+        }
+    } else {
+        /* Retain the existing summary fields for redirected logs and scripts. */
+        fprintf(stderr, ">Z %s %llu -> %llu -> %llu (skipped=%llu) in %.2f sec\n",
+                (F.uswitch ? "generated" : "wrote"),
+                ST.gengout, ST.vcolgout, ST.multigout, ST.skipped,
+                t2 - t1);
+    }
 }
 
 void surge_validate_operation(int frc) {

@@ -11,6 +11,100 @@
 #include <time.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
+bool surge_terminal_live(void)
+{
+    const char *term = getenv("TERM");
+    return isatty(STDERR_FILENO) && (!term || strcmp(term, "dumb") != 0);
+}
+
+const char *surge_terminal_style(const char *ansi)
+{
+    const char *color = getenv("CLICOLOR");
+    return surge_terminal_live() && !getenv("NO_COLOR") &&
+           (!color || strcmp(color, "0") != 0) ? ansi : "";
+}
+
+int surge_terminal_width(void)
+{
+    struct winsize size;
+    if (ioctl(STDERR_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0)
+        return size.ws_col;
+    const char *columns = getenv("COLUMNS");
+    if (columns && *columns) {
+        char *end;
+        long width = strtol(columns, &end, 10);
+        if (!*end && width > 0 && width <= 1000) return (int)width;
+    }
+    return 80;
+}
+
+void surge_print_header(void)
+{
+    fprintf(stderr, "%ssurge-ext%s 2.0%s\n",
+            surge_terminal_style("\033[1;36m"), surge_terminal_style("\033[0m"),
+            !surge_terminal_live() || surge_terminal_width() >= 56
+                ? "  |  Chemical structure generator" : "");
+}
+
+void surge_terminal_detail(const char *label, const char *value)
+{
+    int room = surge_terminal_width() - 14;
+    if (room < 0) room = 0;
+    fprintf(stderr, "  %s%-10s%s", surge_terminal_style("\033[2m"), label,
+            surge_terminal_style("\033[0m"));
+    if ((int)strlen(value) > room && room >= 3)
+        fprintf(stderr, "%.*s...\n", room - 3, value);
+    else
+        fprintf(stderr, "%.*s\n", room, value);
+}
+
+void surge_terminal_clear(void)
+{
+    if (surge_terminal_live()) fputs("\r\033[K", stderr);
+}
+
+void surge_terminal_progress(const char *label, double percent,
+                             const char *primary, const char *secondary, bool complete)
+{
+    int width = surge_terminal_width() - 1;
+    if (width < 1) width = 1;
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    int label_width = width < 40 ? 5 : 9;
+    if (width < 40 && strcmp(label, "Enumerate") == 0) label = "Enum";
+    char tail[256];
+    snprintf(tail, sizeof tail, " %3d%%  %s", (int)percent, primary);
+    int barwidth = width - label_width - 1 - (int)strlen(tail) - 4;
+    if (secondary && *secondary) {
+        int reserved = 3 + (int)strlen(secondary);
+        if (barwidth - reserved >= 6) barwidth -= reserved;
+    }
+    if (barwidth > 24) barwidth = 24;
+    char line[512];
+    if (barwidth >= 6) {
+        char bar[25];
+        int fill = (int)(percent * barwidth / 100.0);
+        for (int i = 0; i < barwidth; ++i) bar[i] = i < fill ? '=' : '-';
+        bar[barwidth] = '\0';
+        snprintf(line, sizeof line, "%-*s [%s]%s", label_width, label, bar, tail);
+    } else {
+        snprintf(line, sizeof line, "%-*s%s", label_width, label, tail);
+    }
+    size_t used = strlen(line);
+    if (secondary && *secondary && used + 3 + strlen(secondary) < (size_t)width)
+        snprintf(line + used, sizeof line - used, " | %s", secondary);
+    /* Clip the plain text before adding escapes, leaving the last column free. */
+    if ((size_t)width < strlen(line)) line[width] = '\0';
+    int label_len = (int)strlen(label);
+    if (label_len > width) label_len = width;
+    fprintf(stderr, "\r%s%.*s%s%s\033[K",
+            surge_terminal_style(complete ? "\033[1;32m" : "\033[1;36m"),
+            label_len, line, surge_terminal_style("\033[0m"), line + label_len);
+    fflush(stderr);
+}
 
 
 bool is_hydrogen(int i) {
@@ -160,6 +254,17 @@ void surge_fatal(const char *msg) {
     const char *log_path = resolve_error_log_path();
     SurgeCtx *ctx = surge_get_thread_ctx();
 
+    bool display = !ctx || !ctx->flags.vv_worker || ctx->flags.verbose;
+    const char *detail = message;
+    if (strncmp(detail, ">E surge : ", 11) == 0) detail += 11;
+    else if (strncmp(detail, ">E ", 3) == 0) detail += 3;
+    if (display) {
+        surge_terminal_clear();
+        fprintf(stderr, "%sError:%s %s", surge_terminal_style("\033[1;31m"),
+                surge_terminal_style("\033[0m"), detail);
+        if (!*detail || detail[strlen(detail) - 1] != '\n') fputc('\n', stderr);
+    }
+
     FILE *fp = fopen(log_path, "a");
     if (fp) {
         time_t now = time(NULL);
@@ -178,8 +283,8 @@ void surge_fatal(const char *msg) {
 
         surge_dump_context(fp, ctx);
         fclose(fp);
+        if (display) fprintf(stderr, "  Details: %s\n", log_path);
     } else {
-        fprintf(stderr, "%s", message);
         fprintf(stderr, "Failed to open error log '%s': %s\n", log_path, strerror(errno));
         if (ctx) {
             fprintf(stderr, "Dumping context to stderr due to logging failure.\n");

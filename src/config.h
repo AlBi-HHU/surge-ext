@@ -108,6 +108,7 @@ typedef struct {
     bool ions;
 
     int vv_max_procs;
+    bool vv_worker; /* child pipeline failures are counted as skipped splits */
 } SurgeFlags;
 
 /* 2) Input configuration */

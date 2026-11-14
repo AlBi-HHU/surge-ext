@@ -67,7 +67,7 @@ typedef struct {
     /* ---- progress ---- */
     unsigned long long total_jobs;
     unsigned long long spawned;
-    unsigned long long finished;
+    unsigned long long finished; /* completed workers plus pre-spawn rejections */
     unsigned long long skipped;
     double last_render_s;
 } VVContext;
