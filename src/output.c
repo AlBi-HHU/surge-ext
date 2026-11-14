@@ -6,6 +6,19 @@
 #include "gtools.h"
 #include "element.h"
 #include "utils.h"
+#include <string.h>
+
+static void write_output(SurgeCtx *ctx, const char *text)
+{
+#ifdef ZLIB
+    if (F.gzip) {
+        if (gzputs(O.gzoutfile, text) < 0)
+            surge_fatal(">E surge : zlib output error\n");
+        return;
+    }
+#endif
+    if (fputs(text, O.outfile) == EOF) surge_fatal(">E surge : output error\n");
+}
 
 void SMILESoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
 /* Write molecules in SMILES format */
@@ -27,7 +40,7 @@ void SMILESoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
             const int q = thiselement->charge;
             const int need_brackets = (!thiselement->organic) ||
                 (thiselement->lowervalence > 0 && FM.hyd[x] > 0) ||
-                (q != 0) || (thiselement->inputname == "C(2.0.0)");
+                (q != 0) || (strcmp(thiselement->inputname, "C(2.0.0)") == 0);
             if (need_brackets) {
                 *(p++) = '[';
                 put_str(&p, thiselement->name);
@@ -87,58 +100,52 @@ void SMILESoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
     *(p++) = '\n';
     *p = '\0';
 
-#ifdef ZLIB
-    if (F.gzip)
-    {
-        if (gzputs(O.gzoutfile,line) < 0)
-            surge_fatal(">E surge : zlib output error\n");
-        return;
-    }
-#endif
-
-    if (fputs(line, O.outfile) == EOF) surge_fatal(">E surge : output error\n");
+    write_output(ctx, line);
 }
 
 
 void SDFformat(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
 /* Write molecules in SDF format */
 {
-    int i,j;
+    char line[128];
+    write_output(ctx, "\nSurge 1.0\n\n");
+    snprintf(line, sizeof line, "%3d%3d  0  0  0  0            999 V2000\n", n, ne);
+    write_output(ctx, line);
 
-#ifdef ZLIB
-    if (F.gzip)
-    {
-        gzprintf(O.gzoutfile,"\nSurge 1.0\n\n");
-        gzprintf(O.gzoutfile,"%3d%3d  0  0  0  0            999 V2000\n",n,ne);
-
-        for (i = 0; i < n; ++i)
-            O.gzprintf(gzoutfile,"    0.0000    0.0000    0.0000 %-2s"
-                   "  0  0  0  0  0%3d  0  0  0  0  0  0\n",
-                   element[vcol[i]].name,element[vcol[i]].valence);
-
-        for (i = 0; i < ne; ++i)
-            gzprintf(gzoutfile,"%3d%3d%3d  0  0  0  0\n",
-                edge[i].x+1,edge[i].y+1,mult[i]+1);
-
-        gzprintf(gzoutfile,"M  END\n$$$$\n");
-
-        return;
+    for (int i = 0; i < n; ++i) {
+        snprintf(line, sizeof line, "    0.0000    0.0000    0.0000 %-2s"
+                "  0  0  0  0  0%3d  0  0  0  0  0  0\n",
+                element[vcol[i]].name,element[vcol[i]].valence);
+        write_output(ctx, line);
     }
-#endif
 
-    fprintf(O.outfile,"\nSurge 1.0\n\n");
-    fprintf(O.outfile,"%3d%3d  0  0  0  0            999 V2000\n",n,ne);
-
-    for (i = 0; i < n; ++i)
-        fprintf(O.outfile,"    0.0000    0.0000    0.0000 %-2s"
-               "  0  0  0  0  0%3d  0  0  0  0  0  0\n",
-               element[vcol[i]].name,element[vcol[i]].valence);
-
-    for (i = 0; i < ne; ++i)
-        fprintf(O.outfile,"%3d%3d%3d  0  0  0  0\n",
+    for (int i = 0; i < ne; ++i) {
+        snprintf(line, sizeof line, "%3d%3d%3d  0  0  0  0\n",
             G.edge[i].x+1,G.edge[i].y+1,mult[i]+1);
+        write_output(ctx, line);
+    }
 
-    fprintf(O.outfile,"M  END\n$$$$\n");
+    /* V2000 permits at most eight atom/charge pairs per M  CHG record. */
+    int atoms[8], charges[8], count = 0;
+    for (int i = 0; i < n; ++i) {
+        int charge = element[vcol[i]].charge;
+        if (charge != 0) {
+            atoms[count] = i + 1;
+            charges[count++] = charge;
+        }
+        if (count == 8 || (i == n - 1 && count > 0)) {
+            char *p = line;
+            p += snprintf(p, sizeof line, "M  CHG%3d", count);
+            for (int j = 0; j < count; ++j)
+                p += snprintf(p, sizeof line - (size_t)(p - line), "%4d%4d",
+                              atoms[j], charges[j]);
+            *p++ = '\n';
+            *p = '\0';
+            write_output(ctx, line);
+            count = 0;
+        }
+    }
+    write_output(ctx, "M  END\n$$$$\n");
 }
 
 void multigoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
@@ -164,16 +171,7 @@ void multigoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
     *(p++) = '\n';
     *p = '\0';
 
-#ifdef ZLIB
-    if (gzip)
-    {
-        if (gzputs(gzoutfile,line) < 0)
-            surge_fatal(">E surge : zlib output error\n");
-        return;
-    }
-#endif
-
-    if (fputs(line, O.outfile) == EOF) surge_fatal(">E surge : output error\n");
+    write_output(ctx, line);
 }
 
 /****************************************************************/
@@ -208,14 +206,5 @@ void alphabeticoutput(SurgeCtx *ctx, int *vcol, int n, int *mult, int ne)
     *(p++) = '\n';
     *p = '\0';
 
-#ifdef ZLIB
-    if (gzip)
-    {
-        if (gzputs(O.gzoutfile,line) < 0)
-            surge_fatal(">E surge : zlib output error\n");
-        return;
-    }
-#endif
-
-    if (fputs(line, O.outfile) == EOF) surge_fatal(">E surge : output error\n");
+    write_output(ctx, line);
 }
