@@ -234,8 +234,9 @@ int main(int argc, char *argv[])
 #ifdef ZLIB
     if (ctx.flags.gzip && ctx.out.gzoutfile) {
         /* Close eager to catch zlib errors early */
-        gzclose(ctx.out.gzoutfile);
+        int rc = gzclose(ctx.out.gzoutfile);
         ctx.out.gzoutfile = NULL;
+        if (rc != Z_OK) surge_fatal(">E surge : error closing gzip output\n");
     }
 #endif
 

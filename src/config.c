@@ -168,7 +168,6 @@ static int open_output(SurgeCtx *ctx)
         if (!O.gzoutfile) return SURGE_ERR_OPEN_OUTPUT;
         /* If your zlib lacks gzbuffer, it will just be a no-op/warning */
         (void)gzbuffer(O.gzoutfile, 1<<16);
-        configure_error_log_from_output(O.filename);
         return SURGE_OK;
     }
 #else

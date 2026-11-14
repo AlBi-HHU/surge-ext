@@ -35,6 +35,11 @@ void vv_spawn_child_for_formula(SurgeCtx *ctx, VVContext *vvc, const char *deriv
         if (!f) surge_fatal(">E surge : cannot open part file for VV child\n");
         if (O.outfile && O.outfile != stdout) fclose(O.outfile);
         O.outfile = f;
+#ifdef ZLIB
+        /* Workers write plain parts; only the parent owns the gzip stream. */
+        F.gzip = false;
+        O.gzoutfile = NULL;
+#endif
 
         memset(&ctx->stats, 0, sizeof ctx->stats);
 

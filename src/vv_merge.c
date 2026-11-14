@@ -113,7 +113,14 @@ void vv_merge_parts_into_final(SurgeCtx *ctx, VVContext *vvc) {
         for (;;) {
             size_t r = fread(buf, 1, BUFSZ, src);
             if (r == 0) break;
-            size_t w = fwrite(buf, 1, r, dst);
+            size_t w;
+#ifdef ZLIB
+            if (F.gzip) {
+                int written = gzwrite(O.gzoutfile, buf, (unsigned)r);
+                w = written > 0 ? (size_t)written : 0;
+            } else
+#endif
+                w = fwrite(buf, 1, r, dst);
             if (w != r) {
                 fclose(src);
                 free(buf);
@@ -134,6 +141,12 @@ void vv_merge_parts_into_final(SurgeCtx *ctx, VVContext *vvc) {
 
     free(buf);
 
+#ifdef ZLIB
+    if (F.gzip) {
+        vv_mergepb_done(&mpb);
+        return; /* The parent closes the gzip stream after enumeration. */
+    }
+#endif
     fflush(dst);
     if (!to_stdout) {
         fclose(dst);
