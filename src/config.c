@@ -54,8 +54,8 @@ void surge_ctx_init(SurgeCtx *ctx)
     IN.extra1  = NULL;
 
     /* Limits */
-    L.maxc    = 6;
-    L.maxd    = 6;
+    L.maxc    = 7;
+    L.maxd    = 7;
     L.mine    = 0;
     L.maxe    = NOLIMIT;
     L.maxbond = 2;

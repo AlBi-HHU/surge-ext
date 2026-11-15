@@ -120,8 +120,8 @@ typedef struct {
 
 /* 3) Geng limits (caps and ranges) */
 typedef struct {
-    int maxc; /* -c (default 6) */
-    int maxd; /* -d (default 6) */
+    int maxc; /* -c (default 7) */
+    int maxd; /* -d (default 7) */
     int mine; /* from -e */
     int maxe; /* from -e or NOLIMIT */
     int maxbond; /* 1 if -T/notriples, else 2 */

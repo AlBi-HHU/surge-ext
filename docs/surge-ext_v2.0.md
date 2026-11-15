@@ -255,13 +255,17 @@ surge-ext supports the following elements with their variable valence and charge
 ### Coordination and degree defaults
 
 `-c#` (distinct neighbours including hydrogen) and `-d#` (distinct non-hydrogen
-neighbours) both default to **6** in surge-ext. Both remain adjustable; use
-`-c4 -d4` for the previous limits. Element-state constraints still apply, and
+neighbours) both default to **7** in surge-ext. Both remain adjustable; use
+`-c6 -d6` for the previous surge-ext defaults or `-c4 -d4` for the original
+upstream limits. Element-state constraints still apply, and
 coordination above 4 is allowed only without hydrogen neighbours.
 
 ```bash
 surge-ext -S 'S(6.0.0)F6'
+surge-ext -S 'Cl(7.0.0)F7'
 ```
+
+The chlorine example is a formal valence-7 graph, not a claim of chemical stability.
 
 ### `-V` — Enable variable valences
 
@@ -377,7 +381,7 @@ surge-ext retains much of the upstream formula and filtering interface, but it
 is not fully backward compatible. The [upstream manual](surge_v1.0.md) describes
 the original program, not the current fork. Important differences include:
 
-- `-c` and `-d` default to 6 rather than 4. Use `-c4 -d4` for the former limits.
+- `-c` and `-d` default to 7 rather than 4. Use `-c4 -d4` for the upstream limits.
 - Legacy state aliases `Nx`, `Px`, `Sx`, and `Sy` are unavailable; use the exact
   tokens in Section 4 where a corresponding state exists. There is no built-in
   neutral valence-5 nitrogen replacement for `Nx`.

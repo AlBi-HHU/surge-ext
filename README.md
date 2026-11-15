@@ -205,8 +205,8 @@ Selected options:
 - `-Z` Allow net-neutral charge-separated assignments as well as neutral ones (with `-V`)
 - `-I` Allow ions as well as neutral assignments; mixed charge signs are rejected (with `-V`)
 - `-j#` Maximum simultaneous variable-valence workers (default 1)
-- `-c#` Maximum distinct neighbours including hydrogen (default 6)
-- `-d#` Maximum distinct non-hydrogen neighbours (default 6)
+- `-c#` Maximum distinct neighbours including hydrogen (default 7)
+- `-d#` Maximum distinct non-hydrogen neighbours (default 7)
 - `-Xstate` Exclude an exact element state (repeatable)
 - `-Ffile` Read excluded states from a file (repeatable)
 - `-P` Enforce planarity
@@ -215,9 +215,11 @@ Selected options:
 A full description of all constraints and structural filters is provided in the manual.
 
 Both limits can still be overridden, for example with `-c4 -d4` to restore the
-previous limits. The defaults allow six-coordinate structures such as
-`'S(6.0.0)F6'` without additional flags; allowed element states and the restriction
-on hydrogen neighbours above coordination 4 still apply.
+original upstream limits, or `-c6 -d6` for the previous surge-ext defaults.
+The defaults allow seven-coordinate structures such as `'Cl(7.0.0)F7'` as well
+as six-coordinate `'S(6.0.0)F6'` without additional limit flags. Allowed element
+states and the restriction on hydrogen neighbours above coordination 4 still
+apply. These are formal graphs, not predictions of chemical stability.
 
 ---
 
