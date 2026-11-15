@@ -27,10 +27,10 @@
 
 #ifdef ZLIB
 #define USAGE \
-  "[-oFILE] [-z] [-u|-A|-S] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
+  "[-oFILE] [-z] [-u|-A|-S] [-V] [-Xstate] [-Ffile] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
 #else
 #define USAGE \
-  "[-oFILE] [-u|-A|-S] [-V] [-Z[#]] [-j#] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
+  "[-oFILE] [-u|-A|-S] [-V] [-Z[#]] [-j#] [-Xstate] [-Ffile] [-T] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula"
 #endif
 
 #define HELPUSECMD
@@ -55,8 +55,8 @@
 "  -b    Only rings of even length (same as only cycles of even length)\n" \
 "  -T    Disallow triple bonds\n" \
 "  -P    Require planarity\n" \
-"  -d#   Maximum degree not counting bond multiplicity or hydrogens (default 4)\n" \
-"  -c#   Maximum coordination number (default 4). This is the maximum number\n" \
+"  -d#   Maximum degree not counting bond multiplicity or hydrogens (default 7)\n" \
+"  -c#   Maximum coordination number (default 7). This is the maximum number\n" \
 "         of distinct atoms (including H) that an atom can be bonded to\n" \
 "         Coordination number > 4 is only allowed if no neighbours are H\n" \
 "  -B#,...,# Specify sets of substructures to avoid (details in manual)\n" \
@@ -74,6 +74,8 @@
 "     9 = no atom in more than one ring of length 3 or 4\n" \
 "  -v     Write more information to stderr\n" \
 "  -V     Enable variable valences\n" \
+"  -Xstate Exclude an exact element state (repeatable; quote parentheses)\n" \
+"  -Ffile  Read excluded states, one per line; blank lines and # comments allowed\n" \
 "  -j#   Use # threads for variable valence (default 1, max 32)\n" \
 "  -m#/#  Do only a part. The two numbers are res/mod where 0<=res<mod.\n" \
 "  -oFILE Write the output to the given file rather than to stdout.\n" \
@@ -94,6 +96,7 @@
 #include "pipeline.h"
 #include "utils.h"
 #include "variable_valence.h"
+#include "vv_progress.h"
 #ifdef ZLIB
 #include "zlib.h"
 #endif
@@ -177,18 +180,7 @@ program with WORDSIZE=64 if you really need to). */
 int main(int argc, char *argv[])
 {
 
-    fprintf(stdout,
-"    _______.  __    __  .______        _______  _______                __________   ___ .___________.\n"
-      "   /       | |  |  |  | |   _  \\      /  _____||   ____|              |   ____\\  \\ /  / |           |\n"
-      "  |   (----` |  |  |  | |  |_)  |    |  |  __  |  |__       ______    |  |__   \\  V  /  `---|  |----`\n"
-      "    \\   \\    |  |  |  | |      /     |  | |_ | |   __|     |______|   |   __|   >   <       |  |     \n"
-      ".----)   |   |  `--'  | |  |\\  \\----.|  |__| | |  |____               |  |____ /  .  \\      |  |     \n"
-      "|_______/     \\______/  | _| `._____| \\______| |_______|              |_______/__/ \\__\\     |__|     \n"
-"\n"
-    );
-    fprintf(stdout,"Chemical structure generator version 2.0\n");
-    fprintf(stdout,"Extended with variable valences, zwitterions and ions\n");
-    fprintf(stdout,"\n");
+    surge_print_header();
 
     SurgeCtx ctx;
     surge_ctx_init(&ctx);
@@ -203,7 +195,7 @@ int main(int argc, char *argv[])
 
     calculate_number_of_elements(&ctx);
 
-    surge_parse_cli(argc, argv, &ctx);
+    if (surge_parse_cli(argc, argv, &ctx)) return 1;
 
     surge_capture_limit_seed(&ctx);
     surge_snapshot_element_runtime(&ctx);
@@ -221,7 +213,11 @@ int main(int argc, char *argv[])
     /* ---- run ---- */
     surge_set_thread_ctx(&ctx);
 
-    double t1 = CPUTIME, t2;
+    if (surge_terminal_live()) {
+        surge_terminal_detail("Formula", ctx.in.formula);
+        fputc('\n', stderr);
+    }
+    double t1 = vv_now_s(), t2;
 
     if (ctx.flags.vvswitch) {
         run_with_variable_valences(&ctx);
@@ -232,12 +228,13 @@ int main(int argc, char *argv[])
 #ifdef ZLIB
     if (ctx.flags.gzip && ctx.out.gzoutfile) {
         /* Close eager to catch zlib errors early */
-        gzclose(ctx.out.gzoutfile);
+        int rc = gzclose(ctx.out.gzoutfile);
         ctx.out.gzoutfile = NULL;
+        if (rc != Z_OK) surge_fatal(">E surge : error closing gzip output\n");
     }
 #endif
 
-    t2 = CPUTIME;
+    t2 = vv_now_s();
 
     surge_print_summary(&ctx, t1, t2);
 

@@ -108,18 +108,20 @@ typedef struct {
     bool ions;
 
     int vv_max_procs;
+    bool vv_worker; /* child pipeline failures are counted as skipped splits */
 } SurgeFlags;
 
 /* 2) Input configuration */
 typedef struct {
     char *formula; /* required */
     char *extra1; /* payload after -G (may be NULL) */
+    bool excluded[MAXELEMENTS]; /* exact element states excluded by -X/-F */
 } InputCfg;
 
 /* 3) Geng limits (caps and ranges) */
 typedef struct {
-    int maxc; /* -c (default 4) */
-    int maxd; /* -d (default 4) */
+    int maxc; /* -c (default 7) */
+    int maxd; /* -d (default 7) */
     int mine; /* from -e */
     int maxe; /* from -e or NOLIMIT */
     int maxbond; /* 1 if -T/notriples, else 2 */

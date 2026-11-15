@@ -3,6 +3,7 @@
 //
 
 #include <time.h>
+#include <string.h>
 
 #include "vv_progress.h"
 #include "utils.h"
@@ -27,58 +28,53 @@ void vv_progress_render(const SurgeCtx *ctx, VVContext *vvc, const char *phase) 
     if (vvc->total_jobs == 0) return;
 
     if (vv_progress_inline == -1) {
-        vv_progress_inline = isatty(STDERR_FILENO) ? 1 : 0;
+        vv_progress_inline = surge_terminal_live() ? 1 : 0;
         /* unbuffered so we see updates immediately */
         setvbuf(stderr, NULL, _IONBF, 0);
     }
 
     double now = vv_now_s();
-    if (!phase && now - vvc->last_render_s < 0.05) return;
+    bool complete = phase && strstr(phase, "complete");
+    bool starting = phase && strstr(phase, "starting");
+    double interval = vv_progress_inline ? 0.1 : 1.0;
+    if (!complete && !starting && now - vvc->last_render_s < interval) return;
     vvc->last_render_s = now;
 
     unsigned long long total   = vvc->total_jobs;
     unsigned long long spawned = vvc->spawned;
     unsigned long long done    = vvc->finished;
     unsigned long long running = (unsigned long long)(vvc->inflight);
-    unsigned long long waiting = (spawned < total ? total - spawned : 0ULL);
+    unsigned long long processed = done + running;
+    unsigned long long waiting = (processed < total ? total - processed : 0ULL);
     unsigned long long skipped = vvc->skipped;
 
     const double pct = (total > 0) ? (100.0 * (double)done  / (double)total) : 0.0;
 
-    enum { BARW = 40 };
-    int fill = (int)((pct / 100.0) * BARW);
-    if (fill < 0) {
-        fill = 0;
-    }
-    if (fill > BARW) {
-        fill = BARW;
-    }
-
-    char bar[BARW + 2];
-    for (int i = 0; i < BARW; ++i) bar[i] = (i < fill ? '=' : ' ');
-    if (fill < BARW) bar[fill] = '>';
-    bar[BARW] = '\0';
-
-    char sp = spin_frame(now);
-
     if (vv_progress_inline) {
-        fprintf(stderr,
-            "\r%c [%s] %3.0f%%  spawned=%llu  running=%llu  waiting=%llu  skipped=%llu  done=%llu/%llu  out=%llu%s",
-            sp, bar, pct, spawned, running, waiting, skipped, done, total, ST.multigout,
-            (phase ? phase : ""));
+        char primary[64], secondary[128];
+        char total_text[32], pool_text[32];
+        snprintf(total_text, sizeof total_text, "%llu", total);
+        snprintf(pool_text, sizeof pool_text, "%d", vvc->pool);
+        int digits = (int)strlen(total_text);
+        snprintf(primary, sizeof primary, "%*llu/%s%s", digits, done, total_text,
+                 surge_terminal_width() >= 48 ? " splits" : "");
+        snprintf(secondary, sizeof secondary, "%*llu active, %*llu skipped",
+                 (int)strlen(pool_text), running, digits, skipped);
+        surge_terminal_progress("Enumerate", pct, primary, secondary, complete);
     } else {
         fprintf(stderr,
-            "%c [%s] %3.0f%%  spawned=%llu  running=%llu  waiting=%llu  skipped=%llu  done=%llu/%llu%s\n",
-            sp, bar, pct, spawned, running, waiting, skipped, done, total,
-            (phase ? phase : ""));
+            "Enumerate %3.0f%%  spawned=%llu  running=%llu  waiting=%llu  skipped=%llu  done=%llu/%llu%s\n",
+            pct, spawned, running, waiting, skipped, done, total,
+            complete ? "  complete" : starting ? "  starting" : "");
     }
     fflush(stderr);
 }
 
 /* newline at the very end */
-void vv_progress_done(const VVContext *vvc) {
+void vv_progress_done(const SurgeCtx *ctx, VVContext *vvc) {
     if (vvc->total_jobs == 0) return;
-    fputc('\n', stderr);
+    vv_progress_render(ctx, vvc, "  complete");
+    if (vv_progress_inline) fputc('\n', stderr);
     fflush(stderr);
 }
 

@@ -1,5 +1,12 @@
 # Users' manual for molecule generator `surge`
 
+> **Historical upstream manual.** This document describes surge v1.0, not the
+> current surge-ext CLI. In surge-ext, `-c` and `-d` default to 7, legacy aliases
+> such as `Nx`, `Px`, `Sx`, and `Sy` are unavailable, and `-E` is not implemented.
+> Plugin interfaces and examples also differ: `-F` now reads an element-state
+> exclusion file rather than selecting the historical plugin's atom-count filter.
+> See the [current extensions manual](surge-ext_v2.0.md) before using these examples.
+
 Brendan D. McKay
 
 School of Computing

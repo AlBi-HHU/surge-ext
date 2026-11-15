@@ -54,8 +54,8 @@ void surge_ctx_init(SurgeCtx *ctx)
     IN.extra1  = NULL;
 
     /* Limits */
-    L.maxc    = 4;
-    L.maxd    = 4;
+    L.maxc    = 7;
+    L.maxd    = 7;
     L.mine    = 0;
     L.maxe    = NOLIMIT;
     L.maxbond = 2;
@@ -168,7 +168,6 @@ static int open_output(SurgeCtx *ctx)
         if (!O.gzoutfile) return SURGE_ERR_OPEN_OUTPUT;
         /* If your zlib lacks gzbuffer, it will just be a no-op/warning */
         (void)gzbuffer(O.gzoutfile, 1<<16);
-        configure_error_log_from_output(O.filename);
         return SURGE_OK;
     }
 #else
@@ -303,6 +302,54 @@ void surge_reset_formula_workspace(SurgeCtx *ctx)
     ctx->fm.needcoordtest = false;
 }
 
+static void exclude_state(SurgeCtx *ctx, const char *token,
+                          const char *source, unsigned long line)
+{
+    for (int i = 0; i < FM.numelements; ++i) {
+        if (strcmp(element[i].inputname, token) == 0) {
+            IN.excluded[i] = true;
+            return;
+        }
+    }
+    fprintf(stderr, ">E surge : unknown excluded state '%s' (%s:%lu)\n",
+            token, source, line);
+    surge_fatal(">E surge : invalid exclusion\n");
+}
+
+static void read_exclusions(SurgeCtx *ctx, const char *path)
+{
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        fprintf(stderr, ">E surge : cannot open exclusion file '%s': %s\n",
+                path, strerror(errno));
+        surge_fatal(">E surge : cannot read exclusions\n");
+    }
+    char line[512];
+    unsigned long number = 0;
+    while (fgets(line, sizeof line, file)) {
+        ++number;
+        if (!strchr(line, '\n') && !feof(file)) {
+            fprintf(stderr, ">E surge : exclusion line too long (%s:%lu)\n", path, number);
+            fclose(file);
+            surge_fatal(">E surge : invalid exclusion file\n");
+        }
+        char *comment = strchr(line, '#');
+        if (comment) *comment = '\0';
+        char *start = line;
+        while (isspace((unsigned char)*start)) ++start;
+        char *end = start + strlen(start);
+        while (end > start && isspace((unsigned char)end[-1])) --end;
+        *end = '\0';
+        if (*start) exclude_state(ctx, start, path, number);
+    }
+    int failed = ferror(file);
+    fclose(file);
+    if (failed) {
+        fprintf(stderr, ">E surge : error reading exclusion file '%s'\n", path);
+        surge_fatal(">E surge : error reading exclusion file\n");
+    }
+}
+
 bool surge_parse_cli(int argc, char **argv, SurgeCtx *ctx) {
     int argi = 1, positional = 0;
     while (argi < argc) {
@@ -323,6 +370,21 @@ bool surge_parse_cli(int argc, char **argv, SurgeCtx *ctx) {
         while (*p) {
             char sw = *p++;
             switch (sw) {
+                case 'X':
+                case 'F': {
+                    const char *spec = p;
+                    if (!*p && argi < argc && argv[argi][0] != '-')
+                        spec = argv[argi++];
+                    if (!*spec) {
+                        fprintf(stderr, ">E surge : -%c expects %s\n", sw,
+                                sw == 'X' ? "a state" : "a file path");
+                        surge_fatal(">E surge : missing exclusion argument\n");
+                    }
+                    if (sw == 'X') exclude_state(ctx, spec, "-X", 0);
+                    else read_exclusions(ctx, spec);
+                    p = (char*)"";
+                    break;
+                }
                 case 'G': { /* -G<extra>, or next token */
                     if (*p=='\0' && argi < argc) { IN.extra1 = argv[argi++]; }
                     else { IN.extra1 = p; }
@@ -496,12 +558,41 @@ void surge_print_summary(SurgeCtx *ctx, double t1, double t2) {
     SURGEPLUGIN_SUMMARY
 #endif
 
-    fprintf(stderr, ">INFO: see error log at surge_errors.log\n");
-
-    fprintf(stderr, ">Z %s %llu -> %llu -> %llu (skipped=%llu) in %.2f sec\n",
-            (F.uswitch ? "generated" : "wrote"),
-            ST.gengout, ST.vcolgout, ST.multigout, ST.skipped,
-            t2 - t1);
+    if (surge_terminal_live()) {
+        char value[512];
+        counter produced = F.outlevel == 1 ? ST.genggood :
+                           F.outlevel == 2 ? ST.vcolgout : ST.multigout;
+        const char *kind = F.outlevel == 1 ? "skeletons" :
+                           F.outlevel == 2 ? "assignments" : "structures";
+        fprintf(stderr, "\n%sComplete%s\n", surge_terminal_style("\033[1;32m"),
+                surge_terminal_style("\033[0m"));
+        snprintf(value, sizeof value, "%llu %s %s", produced, kind,
+                 F.uswitch ? "counted" : "written");
+        surge_terminal_detail("Result", value);
+        snprintf(value, sizeof value, "%.2f s", t2 - t1);
+        surge_terminal_detail("Elapsed", value);
+        if (surge_terminal_width() >= 60) {
+            snprintf(value, sizeof value, "%llu skeletons -> %llu labels", ST.gengout, ST.vcolgout);
+            surge_terminal_detail("Pipeline", value);
+        }
+        if (ST.skipped) {
+            snprintf(value, sizeof value, "%llu valence splits", ST.skipped);
+            surge_terminal_detail("Skipped", value);
+        }
+        if (!F.uswitch) {
+            const char *format = F.outlevel < 4 ? "graph" : F.smiles ? "SMILES" :
+                                 F.alphabetic ? "alphabetical" : "SDF";
+            snprintf(value, sizeof value, "%s%s -> %s", format, F.gzip ? "/gzip" : "",
+                     O.filename ? O.filename : "stdout");
+            surge_terminal_detail("Output", value);
+        }
+    } else {
+        /* Retain the existing summary fields for redirected logs and scripts. */
+        fprintf(stderr, ">Z %s %llu -> %llu -> %llu (skipped=%llu) in %.2f sec\n",
+                (F.uswitch ? "generated" : "wrote"),
+                ST.gengout, ST.vcolgout, ST.multigout, ST.skipped,
+                t2 - t1);
+    }
 }
 
 void surge_validate_operation(int frc) {

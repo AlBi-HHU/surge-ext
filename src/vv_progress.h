@@ -12,7 +12,7 @@ double vv_now_s(void);
 
 void vv_progress_render(const SurgeCtx *ctx, VVContext *vvc, const char *phase);
 
-void vv_progress_done(const VVContext *vvc);
+void vv_progress_done(const SurgeCtx *ctx, VVContext *vvc);
 
 unsigned long long vv_count_total_jobs(const VVContext *vvc);
 

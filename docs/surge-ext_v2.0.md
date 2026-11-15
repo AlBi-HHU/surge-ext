@@ -1,6 +1,11 @@
 # surge-ext Extensions Manual
 
-This document describes the extensions and new features added to surge-ext compared to the original surge 1.0. For basic usage and core functionality, please refer to [surge_v1.0.md](surge_v1.0.md).
+This document describes the current surge-ext extensions and usage differences
+from surge 1.0. The [upstream manual](surge_v1.0.md) is historical reference
+material; see Section 7 below for compatibility differences.
+
+Commands below assume the binary is on `PATH`. For a local build, replace
+`surge-ext` with `./build/surge-ext`.
 
 ## Overview
 
@@ -9,7 +14,8 @@ surge-ext extends the original surge molecular structure generator with the foll
 1. **Variable valence chemistry** — Support for elements with multiple valence states
 2. **Ion and zwitterion enumeration** — Charged molecular structures
 3. **Parallel variable-valence enumeration** — Multi-process scheduling for large search spaces
-4. **Enhanced element support** — Extended periodic table with more elements and valences
+4. **Element-state model** — Explicit valence and formal-charge states from the built-in table
+5. **Element-state exclusions** — Remove exact states with `-X` or an exclusion file with `-F`
 
 ## Project structure
 
@@ -21,10 +27,9 @@ The old surge layout was a flat set of C sources in `src/` (`surge.c`, `geng.c`,
 ├─ Dockerfile
 ├─ build.sh
 ├─ setup.sh
-├─ .github/workflows/docker-image.yml
 ├─ docs/
-│  ├─ surge1_0.md
-│  └─ surge-ext_extensions.md
+│  ├─ surge_v1.0.md
+│  └─ surge-ext_v2.0.md
 └─ src/
     ├─ config.c/h, element.c/h, formula.c/h
     ├─ variable_valence.c/h, vv_sched.c/h, vv_merge.c/h, vv_progress.c/h
@@ -39,15 +44,23 @@ The old surge layout was a flat set of C sources in `src/` (`surge.c`, `geng.c`,
 
 ### Basic Concept
 
-Variable valence enumeration allows elements to have multiple possible valence states, enabling the generation of a broader chemical space. When the `-V` flag is used, surge-ext automatically generates all valid combinations of valence states for specified elements.
+With `-V`, bare element tokens are distributed across allowed states in the
+built-in table. Explicit state tokens remain fixed. Exclusions, charge modes,
+and structural limits restrict the assignments; generated graphs are not
+predictions of chemical stability.
 
 ### Syntax
 
 Variable valences are specified using the format `Element(x.y.z)` in the molecular formula:
 
-- **x** = valence (number of bonds)
+- **x** = valence (sum of bond orders, including bonds to hydrogen)
 - **y** = sign indicator (0 for neutral, 1 for negative, 2 for positive)
-- **z** = formal charge
+- **z** = nonnegative formal-charge magnitude; **y** supplies its sign
+
+Valence is not the number of distinct neighbours: a double bond contributes
+two to valence but only one neighbour. Only listed tokens are accepted; neutral
+divalent sulfur is written `S`, not `S(2.0.0)`. Quote formulas containing
+parentheses when passing them through a shell.
 
 ### Examples
 
@@ -57,25 +70,28 @@ Generate isomers with sulfur at valence 2, 4, and 6:
 surge-ext -V -u S2O2H2
 ```
 
-Mix standard and variable valence specifications:
+Mix a bare token with a fixed sulfur state (only bare `S` is expanded):
 
 ```bash
-surge-ext -V -u S(4.0.0)S(6.0.0)H2O3
+surge-ext -V -u 'SS(4.0.0)H2O3'
 ```
 
 Specify exact valences for multiple atoms:
 
 ```bash
-surge-ext -V -u C(2.0.0)C(3.1.1)H6O
+surge-ext -u 'C(2.0.0)2H2'
 ```
 
 ### How It Works
 
 When `-V` is enabled, surge-ext performs the following:
 
-1. **Valence Combination Generation** — Creates all valid combinations of specified valences for each element
-2. **Sequential Processing** — For each combination, generates all non-isomorphic structures
-3. **Automatic Scheduling** — Splits variable-valence enumeration across processes using `-j#`
+1. **State assignments** — Distributes bare atoms across allowed states while keeping explicit variants fixed
+2. **Filtering** — Applies exclusions, charge restrictions, and feasibility checks
+3. **Generation** — Schedules a structure-generation run for each remaining assignment, with at most `-j#` workers at once
+
+If no families need expansion, the formula runs directly through the pipeline
+without the variable-valence scheduler.
 
 **Example for $S_2O_2H_2$:**
 
@@ -88,13 +104,21 @@ When `-V` is enabled, surge-ext performs the following:
 | 5.          |     0     |     0     |     2     |  2  |  2  |
 | 6.          |     1     |     0     |     1     |  2  |  2  |
 
-All combinations are enumerated, yielding structures for each valence state distribution.
+These are the six sulfur distributions across the neutral states 2, 4, and 6.
+Oxygen also has charged states, which can participate when the charge mode allows
+them. Not every distribution is feasible or produces structures.
 
 ## 2. Zwitterions and Ions
 
+The charge checks described here apply during variable-valence scheduling.
+An input with no families to expand takes the direct pipeline path instead;
+these flags should not be used as charge validators for explicit-only inputs.
+
 ### Zwitterions (`-Z`)
 
-Zwitterions are molecules with both positive and negative charges distributed across different atoms. The `-Z` flag enables enumeration of zwitterionic structures when used with `-V`.
+Zwitterions have positive and negative formal charges on different atoms and
+zero net charge. With `-V`, `-Z` allows net-neutral assignments, including both
+charge-separated and wholly neutral structures. It is not a zwitterion-only filter.
 
 ```bash
 surge-ext -V -Z -u C2H5NO2
@@ -104,10 +128,17 @@ Constraints:
 
 - The `-Z` flag only works with `-V` (variable valence mode)
 - Generated zwitterions maintain overall charge neutrality through internal +/- pairs
+- With `-Z` alone, charged assignments must have zero net charge
+- The numeric pair cap advertised by CLI help is not enforced by the current implementation
 
 ### Ions (`-I`)
 
-The `-I` flag enables enumeration of charged ions (experimental feature). Like zwitterions, this only works with `-V` enabled.
+With `-V`, `-I` allows net-charged assignments as well as neutral ones
+(experimental). Assignments containing both positive and negative formal charges
+are rejected. Combining `-I` and `-Z` applies both restrictions, so only wholly
+neutral assignments survive the scheduler's charge checks. Use these modes
+separately to enumerate ions or charge-separated structures. Neither flag is a
+charged-only filter.
 
 ```bash
 surge-ext -V -I -u C2H5NO2
@@ -129,19 +160,24 @@ When variable valence enumeration generates many combinations, you can distribut
 surge-ext -V -j4 -u S2O2H2
 ```
 
-This splits the variable-valence enumeration into 4 parallel jobs, each handling a subset of combinations. Results are automatically merged.
+This runs at most four split workers simultaneously, with a new child process
+for each scheduled assignment. It does not create four fixed partitions.
+Molecular output from workers is merged after enumeration.
 
 ### Performance Considerations
 
-- **Default** (`-j1`): Single-process execution
-- **Recommended**: Use `-j$(nproc)` or `-j#` where # equals your CPU core count
+- **Default** (`-j1`): Parent scheduler with at most one child worker at a time
+- **Worker limit**: Choose `-j#` to fit available CPU, memory, and output capacity
 - **Output merging**: Results from all parallel jobs are combined automatically with progress reporting
 
-Example with automatic core detection (Linux/macOS):
+Example with automatic core detection on Linux:
 
 ```bash
 surge-ext -V -j$(nproc) -S C8H10N2
 ```
+
+On macOS, use `-j$(sysctl -n hw.logicalcpu)` instead. A higher worker limit does
+not guarantee a proportional speedup.
 
 ## 4. Supported Elements and Valences
 
@@ -173,35 +209,68 @@ surge-ext supports the following elements with their variable valence and charge
 |         | `F(2.2.1)`   |    2    |   1    |
 |         | `F(3.2.2)`   |    3    |   2    |
 |         | `F(4.2.3)`   |    4    |   3    |
+| **Al**  | `Al`         |    3    |   0    |
+| **Si**  | `Si`         |    4    |   0    |
 | **Cl**  | `Cl`         |    1    |   0    |
 |         | `Cl(2.2.1)`  |    2    |   1    |
 |         | `Cl(2.1.1)`  |    2    |   -1   |
 |         | `Cl(3.0.0)`  |    3    |   0    |
 |         | `Cl(3.2.2)`  |    3    |   2    |
+|         | `Cl(3.1.2)`  |    3    |   -2   |
+|         | `Cl(4.2.3)`  |    4    |   3    |
+|         | `Cl(4.2.1)`  |    4    |   1    |
 |         | `Cl(4.1.1)`  |    4    |   -1   |
+|         | `Cl(4.1.3)`  |    4    |   -3   |
+|         | `Cl(5.2.2)`  |    5    |   2    |
 |         | `Cl(5.0.0)`  |    5    |   0    |
+|         | `Cl(5.1.2)`  |    5    |   -2   |
 |         | `Cl(6.2.1)`  |    6    |   1    |
+|         | `Cl(6.1.1)`  |    6    |   -1   |
 |         | `Cl(7.0.0)`  |    7    |   0    |
 | **Br**  | `Br`         |    1    |   0    |
 | **I**   | `I`          |    1    |   0    |
 | **P**   | `P`          |    3    |   0    |
 |         | `P(1.1.2)`   |    1    |   -2   |
 |         | `P(2.1.1)`   |    2    |   -1   |
+|         | `P(2.1.3)`   |    2    |   -3   |
+|         | `P(3.1.2)`   |    3    |   -2   |
 |         | `P(4.2.1)`   |    4    |   1    |
+|         | `P(4.1.1)`   |    4    |   -1   |
 |         | `P(5.0.0)`   |    5    |   0    |
 | **S**   | `S`          |    2    |   0    |
 |         | `S(1.1.1)`   |    1    |   -1   |
+|         | `S(2.1.2)`   |    2    |   -2   |
+|         | `S(3.2.1)`   |    3    |   1    |
 |         | `S(3.1.1)`   |    3    |   -1   |
+|         | `S(3.1.3)`   |    3    |   -3   |
 |         | `S(4.0.0)`   |    4    |   0    |
 |         | `S(4.2.2)`   |    4    |   2    |
+|         | `S(4.1.2)`   |    4    |   -2   |
 |         | `S(5.2.1)`   |    5    |   1    |
+|         | `S(5.1.1)`   |    5    |   -1   |
 |         | `S(6.0.0)`   |    6    |   0    |
 
 ## 5. New Command-Line Options
 
+### Coordination and degree defaults
+
+`-c#` (distinct neighbours including hydrogen) and `-d#` (distinct non-hydrogen
+neighbours) both default to **7** in surge-ext. Both remain adjustable; use
+`-c6 -d6` for the previous surge-ext defaults or `-c4 -d4` for the original
+upstream limits. Element-state constraints still apply, and
+coordination above 4 is allowed only without hydrogen neighbours.
+
+```bash
+surge-ext -S 'S(6.0.0)F6'
+surge-ext -S 'Cl(7.0.0)F7'
+```
+
+The chlorine example is a formal valence-7 graph, not a claim of chemical stability.
+
 ### `-V` — Enable variable valences
 
-Activates variable valence enumeration. Allows elements to have multiple valence states in a single run.
+Expands bare element tokens across their allowed states. Explicit variants
+remain fixed; exclusions and charge restrictions still apply.
 
 ```bash
 surge-ext -V -u C2H6
@@ -209,7 +278,8 @@ surge-ext -V -u C2H6
 
 ### `-Z` — Enumerate zwitterions
 
-Generates zwitterionic structures with internal +/- pairs. Only works with `-V`.
+Allows net-neutral charge-separated assignments as well as wholly neutral ones
+with `-V`. See Section 2 for combined `-I`/`-Z` behavior and the unenforced pair cap.
 
 ```bash
 surge-ext -V -Z -u C2H5NO2
@@ -217,7 +287,8 @@ surge-ext -V -Z -u C2H5NO2
 
 ### `-I` — Allow ions
 
-Enumerates charged ions (experimental). Only works with `-V`.
+Allows ions as well as neutral assignments with `-V` (experimental). Assignments
+with both charge signs are rejected. See Section 2 before combining with `-Z`.
 
 ```bash
 surge-ext -V -I -u C2H5NO2
@@ -225,11 +296,41 @@ surge-ext -V -I -u C2H5NO2
 
 ### `-j#` — Parallel variable-valence splits
 
-Distributes variable-valence enumeration across # processes (default 1). Only effective with `-V`.
+Limits simultaneous variable-valence child workers to # (default 1), in addition
+to the parent scheduler. Only effective when `-V` expands variable families.
 
 ```bash
 surge-ext -V -j4 -u S2O2H2
 ```
+
+### `-Xstate` and `-Ffile` — Exclude exact element states
+
+`-X` excludes one exact state. `-F` reads states from a file, one per line;
+blank lines, surrounding whitespace, and `#` comments are allowed.
+
+```bash
+surge-ext -V -S -X 'C(2.0.0)' C4H6O
+surge-ext -V -S -F exclusions.txt C4H6O
+```
+
+Example `exclusions.txt`:
+
+```text
+# Omit these states
+C(2.0.0)
+N(4.2.1)  # positive nitrogen
+```
+
+Both options are repeatable and accept attached or separate arguments, such as
+`'-XC(2.0.0)'`, `-X 'C(2.0.0)'`, `-Fexclusions.txt`, and `-F exclusions.txt`.
+Their exclusions are combined; duplicates are harmless.
+
+Matching is exact: `-X C` excludes ordinary tetravalent carbon, not all carbon
+states. With `-V`, bare `C` can still be distributed across remaining states.
+An explicit variant requested in the formula cannot also be excluded. Without
+`-V`, requesting an excluded state, including a bare token, is an error.
+Unknown states, unreadable files, or excluding every available state of a needed
+element are errors. Charge-mode restrictions still apply.
 
 ## 6. Examples and Use Cases
 
@@ -246,12 +347,12 @@ surge-ext -V -u S2O2H2
 Enumerate structures with sulfur at specific valence states:
 
 ```bash
-surge-ext -u S(2.0.0)S(4.0.0)H2O3
+surge-ext -u 'SS(4.0.0)H2O3'
 ```
 
 ### Example 3: SMILES Output with Parallelization
 
-Generate SMILES for variable valence isomers with 8 parallel jobs:
+Generate SMILES with at most eight simultaneous split workers:
 
 ```bash
 surge-ext -V -j8 -S S2O2H2
@@ -259,7 +360,8 @@ surge-ext -V -j8 -S S2O2H2
 
 ### Example 4: Zwitterion Enumeration
 
-Enumerate zwitterionic amino acid-like structures:
+Enumerate net-neutral assignments, including neutral and charge-separated
+structures, for the formula of glycine. The output is not limited to amino acids:
 
 ```bash
 surge-ext -V -Z -S C2H5NO2
@@ -275,7 +377,21 @@ surge-ext -V -I -u C2H5NO2
 
 ## 7. Relationship to Original surge 1.0
 
-surge-ext maintains full backward compatibility with the original surge 1.0 command syntax. All options documented in [surge1_0.md](surge1_0.md) continue to work as expected. The new options (`-V`, `-Z`, `-I`, `-j`) are pure extensions that do not affect the behavior of existing commands.
+surge-ext retains much of the upstream formula and filtering interface, but it
+is not fully backward compatible. The [upstream manual](surge_v1.0.md) describes
+the original program, not the current fork. Important differences include:
+
+- `-c` and `-d` default to 7 rather than 4. Use `-c4 -d4` for the upstream limits.
+- Legacy state aliases `Nx`, `Px`, `Sx`, and `Sy` are unavailable; use the exact
+  tokens in Section 4 where a corresponding state exists. There is no built-in
+  neutral valence-5 nitrogen replacement for `Nx`.
+- Runtime element definition with `-E` is not implemented.
+- `-F` reads an exclusion file, conflicting with the historical plugin example's
+  atom-count option.
+- Plugin interfaces and build configuration differ; old plugin examples are
+  not drop-in extensions.
+- Output formatting and diagnostics have changed. Byte-for-byte identical
+  output is not promised.
 
 Original surge command:
 
@@ -283,41 +399,47 @@ Original surge command:
 surge -S C8H6N2
 ```
 
-Equivalent surge-ext command (produces identical output):
+Corresponding surge-ext command with the former global limits:
 
 ```bash
-surge-ext -S C8H6N2
+surge-ext -c4 -d4 -S C8H6N2
 ```
 
 ## 8. Advanced Topics
 
 ### Element Definition at Runtime
 
-The `-E` option from surge 1.0 continues to work for adding temporary elements:
-
-```bash
-surge-ext -E As3 -u As2O3H6
-```
-
-See [surge1_0.md](surge1_0.md) Section 8 for details.
+The surge 1.0 `-E` option is not implemented in the current CLI. Supported
+elements and states are defined in `src/element.c`; changing the built-in table
+requires rebuilding. The historical manual's `-E` examples do not apply.
 
 ### Plugin System
 
-surge-ext retains the plugin facility from surge 1.0, allowing custom code injection for advanced filtering and analysis. See [surge1_0.md](surge1_0.md) Section 9 for plugin development details.
+surge-ext supports compile-time plugins, but its interfaces and CMake build
+configuration differ from the upstream examples. Consult `CMakeLists.txt` and
+the plugin hooks in `src/` when developing a plugin. Section 9 of the
+[historical manual](surge_v1.0.md) explains the original design, not a verified
+recipe for the current fork.
 
 ## 9. Chemical Background
 
 ### Why Variable Valences Matter
 
-Most elements follow the **octet rule**: atoms achieve stability with 8 electrons in their outer shell. This determines fixed valences (C=4, N=3, O=2).
+The **octet rule** is a useful heuristic for many main-group compounds, not a
+universal stability rule. Common neutral valences include C=4, N=3, and O=2,
+but formal charges and bonding environments can require other states.
 
-**Hypervalence** occurs when elements (period ≥3) exceed the octet by using d-orbitals. Sulfur exemplifies this:
+**Hypervalent** compounds are commonly described by Lewis structures with more
+than eight electrons around a central atom. This does not require a d-orbital
+expansion explanation. surge-ext models formal valence and charge rather than
+electronic structure. Examples of sulfur bond-order sums are:
 
 - **S (valence 2)**: H₂S
 - **S (valence 4)**: SO₂
 - **S (valence 6)**: SF₆
 
-**Variable valences** are essential for modeling hypervalent compounds and heteroatom chemistry in materials science and astrochemistry.
+Multiple formal valence states let the generator represent these different
+bonding patterns within its graph model.
 
 ### Ions vs Zwitterions
 
@@ -330,22 +452,22 @@ Most elements follow the **octet rule**: atoms achieve stability with 8 electron
 
 - Amino acids (e.g., glycine): –NH₃⁺ and –COO⁻ groups on the same molecule
 
-Both are critical in biochemistry and solution chemistry.
+The built-in state table limits which ions and charge-separated graphs can be
+represented. These examples describe chemical categories, not a promise that
+every example is supported as an input formula.
 
 ---
 
 ## 10. Comparison with Other Structure Generators
 
-| Tool          | License | Method                 | Variable valence | Speed        | Stereoisomers |
-| :------------ | :------ | :--------------------- | :--------------- | :----------- | :------------ |
-| **MOLGEN**    | Closed  | Canonical augmentation | Fixed pre-run    | Baseline     | ✔             |
-| **MAYGEN**    | Open    | Orderly generation     | Fixed pre-run    | Fast         | ✘             |
-| **surge**     | Open    | Canonical augmentation | Fixed pre-run    | State of art | ✘             |
-| **enu**       | Open    | Canonical augmentation | Fixed pre-run    | Fast         | ✔             |
-| **Sherlock**  | Open    | NMR-guided enumeration | Fixed pre-run    | Moderate     | ✘             |
-| **surge-ext** | Open    | Canonical augmentation | ✔ Multi-run      | State of art | ✘             |
+Related tools include MOLGEN, MAYGEN, surge, enu, and Sherlock. Their scopes,
+constraints, and input models differ; no current feature audit or like-for-like
+benchmark is provided here.
 
-**Key differentiator**: surge-ext is the only open-source canonical generator supporting automated multi-valence enumeration within a single invocation.
+surge-ext schedules multiple valence-state assignments within one invocation.
+The upstream surge publication reports performance for its own benchmark
+workloads, not for this fork's expanded state space. No exclusivity or relative
+speed claim is made for surge-ext.
 
 ---
 
@@ -354,6 +476,6 @@ Both are critical in biochemistry and solution chemistry.
 ### Current Limitations
 
 - Ion enumeration (`-I`) is experimental and may not cover all chemically valid ionic structures
-- Elements beyond period 3 are not yet supported
+- Only the elements and states in Section 4 are supported; this includes Br and I
 - Aromaticity detection is not implemented
 - No resonance structure detection

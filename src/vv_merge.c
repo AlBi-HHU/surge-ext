@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <string.h>
 
 #include "gtools.h"
 #include "utils.h"
@@ -18,51 +19,49 @@
 /* human-readable bytes (e.g., 12.3MB) */
 void vv_human_bytes(char *buf, size_t bufsz, unsigned long long b)
 {
-    const char *u[] = {"B","KB","MB","GB","TB"};
+    const char *u[] = {"B","KiB","MiB","GiB","TiB"};
     int i = 0;
     double x = (double)b;
     while (x >= 1024.0 && i < 4) { x /= 1024.0; ++i; }
-    snprintf(buf, bufsz, "%.1f%s", x, u[i]);
+    if (i == 0) snprintf(buf, bufsz, "%llu B", b);
+    else snprintf(buf, bufsz, "%.1f %s", x, u[i]);
 }
 
 void vv_mergepb_render(VVMergePB *pb, const char *phase)
 {
+    if (pb->total_bytes == 0) return;
     if (pb->inline_mode == -1) {
-        pb->inline_mode = isatty(STDERR_FILENO) ? 1 : 0;
+        pb->inline_mode = surge_terminal_live() ? 1 : 0;
         setvbuf(stderr, NULL, _IONBF, 0);
     }
 
     double now = vv_now_s();
-    if (!phase && (now - pb->last_render_s) < 0.05) return; /* ~20 fps */
+    bool complete = phase && strstr(phase, "complete");
+    bool starting = phase && strstr(phase, "starting");
+    double interval = pb->inline_mode ? 0.1 : 1.0;
+    if (!complete && !starting && (now - pb->last_render_s) < interval) return;
     pb->last_render_s = now;
 
     double pct = pb->total_bytes ? (100.0 * (double)pb->copied_bytes / (double)pb->total_bytes) : 0.0;
-    enum { BARW = 40 };
-    int fill = (int)((pct / 100.0) * BARW); if (fill < 0) fill = 0; if (fill > BARW) fill = BARW;
-
-    char bar[BARW+2];
-    for (int i=0;i<BARW;++i) bar[i] = (i<fill ? '=' : ' ');
-    if (fill < BARW) bar[fill] = '>';
-    bar[BARW] = '\0';
-
     char cur[32], tot[32];
     vv_human_bytes(cur, sizeof cur, pb->copied_bytes);
     vv_human_bytes(tot, sizeof tot, pb->total_bytes);
 
-    char sp = spin_frame(now);
-
     if (pb->inline_mode) {
-        fprintf(stderr, "\r%c [MERGE %s] %3.0f%%  %s / %s%s",
-                sp, bar, pct, cur, tot, (phase ? phase : ""));
+        char primary[80];
+        snprintf(primary, sizeof primary, "%*s / %s", (int)strlen(tot), cur, tot);
+        surge_terminal_progress("Merge", pct, primary, NULL, complete);
     } else {
-        fprintf(stderr, "\r [MERGE %s] %3.0f%%  %s / %s%s\n",
-                bar, pct, cur, tot, (phase ? phase : ""));
+        fprintf(stderr, "MERGE %3.0f%%  %s / %s%s\n", pct, cur, tot,
+                complete ? "  complete" : starting ? "  starting" : "");
     }
     fflush(stderr);
 }
 
 void vv_mergepb_done(VVMergePB *pb)
 {
+    if (pb->total_bytes == 0) return;
+    vv_mergepb_render(pb, "  complete");
     if (pb->inline_mode == 1) { fputc('\n', stderr); fflush(stderr); }
 }
 
@@ -94,6 +93,9 @@ void vv_merge_parts_into_final(SurgeCtx *ctx, VVContext *vvc) {
 
     FILE *dst = O.outfile ? O.outfile : stdout;
     if (!dst) surge_fatal(">E surge : cannot open final output file for merging\n");
+    /* A live stderr bar must not share a line with molecules on the terminal. */
+    if (surge_terminal_live() && dst == stdout && isatty(STDOUT_FILENO))
+        mpb.inline_mode = 0;
 
     enum { BUFSZ = 256 * 1024 };
     char *buf = (char*)malloc(BUFSZ);
@@ -113,7 +115,14 @@ void vv_merge_parts_into_final(SurgeCtx *ctx, VVContext *vvc) {
         for (;;) {
             size_t r = fread(buf, 1, BUFSZ, src);
             if (r == 0) break;
-            size_t w = fwrite(buf, 1, r, dst);
+            size_t w;
+#ifdef ZLIB
+            if (F.gzip) {
+                int written = gzwrite(O.gzoutfile, buf, (unsigned)r);
+                w = written > 0 ? (size_t)written : 0;
+            } else
+#endif
+                w = fwrite(buf, 1, r, dst);
             if (w != r) {
                 fclose(src);
                 free(buf);
@@ -134,6 +143,12 @@ void vv_merge_parts_into_final(SurgeCtx *ctx, VVContext *vvc) {
 
     free(buf);
 
+#ifdef ZLIB
+    if (F.gzip) {
+        vv_mergepb_done(&mpb);
+        return; /* The parent closes the gzip stream after enumeration. */
+    }
+#endif
     fflush(dst);
     if (!to_stdout) {
         fclose(dst);

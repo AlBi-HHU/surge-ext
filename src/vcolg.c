@@ -213,9 +213,9 @@ static void vcolgoutput(SurgeCtx *ctx, graph *g, int *vcolindex, int n)
     *p = '\0';
 
 #ifdef ZLIB
-    if (gzip)
+    if (F.gzip)
     {
-        if (gzputs(gzoutfile,line) < 0)
+        if (gzputs(O.gzoutfile,line) < 0)
             surge_fatal(">E surge : zlib output error\n");
         return;
     }
