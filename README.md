@@ -2,7 +2,7 @@
 
 # surge-ext — Extended Chemical Structure Generator
 
-**surge-ext** is an extended, production-ready fork of the chemical structure generator [surge](https://github.com/StructureGenerator/surge). It enumerates all non-isomorphic constitutional isomers for a given molecular formula using canonical augmentation based on [nauty & traces](https://pallini.di.uniroma1.it/). The extensions introduced in surge-ext enable systematic exploration of chemical spaces involving **variable valences**, **charged species**, and **zwitterions**, with support for **parallel enumeration**.
+**surge-ext** extends the chemical structure generator [surge](https://github.com/StructureGenerator/surge) with variable-valence enumeration, formal-charge states, element-state exclusions, and parallel scheduling of valence assignments. It generates constitutional-isomer graphs for a molecular formula using canonical augmentation and [nauty](https://pallini.di.uniroma1.it/), subject to the supported element states and selected constraints.
 
 This software was developed in the context of a Bachelor's thesis by Federico Nellen at Heinrich-Heine University Düsseldorf, within the [Algorithmic Bioinformatics](https://albi.hhu.de) research group.
 
@@ -35,37 +35,38 @@ This software was developed in the context of a Bachelor's thesis by Federico Ne
 
 ## Scientific scope and motivation
 
-The exhaustive generation of constitutional isomers from a given formula is central to cheminformatics and algorithmic bioinformatics. Structure generators underpin tasks in QSPR/QSAR modeling, virtual screening of chemical libraries, computer-assisted structure elucidation (CASE), and materials design. In astrochemistry and theoretical spectroscopy, complete coverage of the structural search space enables robust downstream workflows: from deriving plausible formulas via spectral analysis, through enumerating all non-isomorphic isomers, to quantum-chemical optimization and targeted laboratory validation.
+Enumerating constitutional isomers provides candidate structures for tasks such as computer-assisted structure elucidation, virtual screening, and theoretical spectroscopy. Generated graphs satisfy the program's formal valence and structural constraints; they are not predictions of chemical stability or experimental observability.
 
-Within graph-based chemical modeling, molecules are represented as labeled graphs whose vertices encode elements and charges, and edges encode bond multiplicities. Canonical augmentation and strong pruning avoid duplication by generating only class representatives under automorphism. The original _surge_ leverages nauty/traces to achieve state-of-the-art performance for fixed-valence, neutral molecules. However, many relevant systems require handling of multiple valence states and formal charges, including internal charge-separated (zwitterionic) species.
+Molecules are represented as labeled graphs whose vertices encode elements and formal charges, and whose edges encode bond orders. The original _surge_ uses canonical augmentation to generate representatives of graph-isomorphism classes. surge-ext runs this pipeline for allowed distributions of valence and charge states.
 
-**surge-ext** extends the scope while preserving rigorous guarantees:
+The extensions provide:
 
 - Systematic enumeration across multiple valence assignments per element (variable valences).
 - Support for ionic and zwitterionic species.
 - Parallel scheduling of variable-valence splits for large combinatorial spaces.
-- Completeness and non-isomorphism guarantees maintained across the extended chemical space.
+- Enumeration within the implemented element-state model and selected structural limits. The upstream algorithm's correctness arguments do not by themselves validate every extension in this fork.
 
 ---
 
 ## Key features
 
-- Exhaustive enumeration of non-isomorphic constitutional isomers.
+- Constitutional-isomer enumeration within the supported element-state model.
 - Support for variable valences (e.g. S, P, halogens).
 - Enumeration of ions and internal charge-separated (zwitterionic) structures.
 - Parallelized variable-valence enumeration for large search spaces.
-- Deterministic output generation (SMILES, SDF, alphabetical).
+- SMILES, SDF, and alphabetic output formats.
 - Modular plugin system for customized generators.
-- Reproducible builds via CMake and Docker.
+- CMake builds and Docker packaging.
 
 ---
 
 ## Documentation
 
-- **Extensions and new functionality**: [docs/surge-ext_extensions.md](docs/surge-ext_extensions.md)
-- **Original surge (v1.0) functionality**: [docs/surge1_0.md](docs/surge1_0.md)
+- **Current extensions and usage**: [docs/surge-ext_v2.0.md](docs/surge-ext_v2.0.md)
+- **Historical upstream manual**: [docs/surge_v1.0.md](docs/surge_v1.0.md)
 
-Users are encouraged to consult both documents for a complete understanding of the algorithmic foundations and extensions.
+The upstream manual is reference material, not a compatibility guarantee. See the
+extensions manual for changed defaults, element tokens, and unavailable options.
 
 ---
 
@@ -83,10 +84,10 @@ The build process automatically downloads and compiles **nauty**.
 
 ```bash
 sudo apt update
-sudo apt install build-essential cmake
+sudo apt install build-essential cmake curl
 ```
 
-Alternatively, Docker can be used for a fully isolated and reproducible environment.
+Alternatively, Docker packages the build dependencies and runtime in a container.
 
 ---
 
@@ -110,8 +111,11 @@ The interactive build script provides:
 chmod +x setup.sh
 ./setup.sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -- -j$(nproc)
+cmake --build build
 ```
+
+This command works without `nproc`. The native option in `build.sh` currently
+uses `nproc`, so on stock macOS use the manual build commands instead.
 
 ---
 
@@ -185,10 +189,10 @@ unless `-v` is enabled; input errors are always shown directly.
 
 ```text
 Usage: surge-ext [-oFILE] [-z] [-u|-A|-S] [-T] [-V] [-Z] [-I] [-j#]
-                 [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula
+                 [-Xstate] [-Ffile] [-e#|-e#:#] [-d#] [-c#] [-m#/#] formula
 ```
 
-Known elements: C, B, N, P, O, S, H, F, Cl, Br, I
+Known elements: H, B, C, N, O, F, Al, Si, P, S, Cl, Br, I
 
 Selected options:
 
@@ -196,9 +200,9 @@ Selected options:
 - `-A` Alphabetical format
 - `-u` Count only (no output)
 - `-V` Enable variable valences
-- `-Z` Enumerate zwitterions (requires `-V`)
-- `-I` Allow ions (requires `-V`)
-- `-j#` Parallel valence splits
+- `-Z` Allow net-neutral charge-separated assignments as well as neutral ones (with `-V`)
+- `-I` Allow ions as well as neutral assignments; mixed charge signs are rejected (with `-V`)
+- `-j#` Maximum simultaneous variable-valence workers (default 1)
 - `-c#` Maximum distinct neighbours including hydrogen (default 6)
 - `-d#` Maximum distinct non-hydrogen neighbours (default 6)
 - `-Xstate` Exclude an exact element state (repeatable)
@@ -223,10 +227,15 @@ Elements with multiple allowed valences and charges can be specified explicitly 
 Element(valence.sign.charge)
 ```
 
+Here `valence` is the sum of bond orders, `sign` is 0 (neutral), 1 (negative),
+or 2 (positive), and `charge` is the nonnegative charge magnitude. Only tokens
+listed in the element table are accepted; for example, neutral divalent sulfur
+is `S`, not `S(2.0.0)`.
+
 Example:
 
 ```bash
-surge-ext -u S(6.0.0)2H2O3
+./build/surge-ext -S 'S(6.0.0)F6'
 ```
 
 Multiple valence variants of the same element may be combined in a single formula.
@@ -250,7 +259,7 @@ N(4.2.1)  # positive nitrogen
 ```
 
 ```bash
-./build/surge-ext -V -S -F exclusions.txt C4H6NO
+./build/surge-ext -V -S -F exclusions.txt C4H6O
 ```
 
 Both options accept attached or separate arguments (`'-XC(2.0.0)'` or
@@ -270,7 +279,11 @@ Charge restrictions from `-I`/`-Z` still apply.
 
 ## Variable-valence enumeration model
 
-When the `-V` flag is enabled, surge-ext enumerates all valid distributions of the specified valence states across the atoms in the input formula. For each distribution, the full set of non-isomorphic constitutional isomers is generated independently, ensuring completeness across the combined chemical space.
+With `-V`, bare element tokens are distributed across their allowed states;
+explicit variants such as `S(6.0.0)` remain fixed. Exclusions and charge-mode
+restrictions narrow the assignments, and infeasible assignments are skipped.
+Each remaining distribution runs through the structure-generation pipeline.
+If no families need expansion, the formula runs directly through the pipeline.
 
 An overview of the enumeration workflow is shown below:
 
@@ -286,8 +299,10 @@ An overview of the enumeration workflow is shown below:
 | Variable valence     | ✘              | ✔         |
 | Ions                 | ✘              | ✔         |
 | Zwitterions          | ✘              | ✔         |
-| Parallel enumeration | ✘              | ✔         |
-| Docker support       | non functional | ✔         |
+
+surge-ext adds worker scheduling across variable-valence assignments. Upstream
+also documents residue/modulus splitting for separately launched processes;
+these are different forms of parallel execution.
 
 ---
 
@@ -295,7 +310,7 @@ An overview of the enumeration workflow is shown below:
 
 Planned developments include:
 
-- Extension to additional elements (period ≥ 4)
+- Extension to additional elements and states beyond the current table
 - Validation against large chemical databases (e.g. PubChem)
 - Post-processing for tautomer and resonance equivalence
 - Integration with RDKit and related toolkits
@@ -306,7 +321,7 @@ Planned developments include:
 
 ## Related tools and ecosystem
 
-### Open-source structure generators
+### Related structure-generation tools
 
 - **MOLGEN** — Established standard with extensive constraint support (closed-source, limited availability)
 - **MAYGEN** — Open-source generator using orderly generation
@@ -315,7 +330,10 @@ Planned developments include:
 
 ### Performance context
 
-surge achieves state-of-the-art speed (orders of magnitude faster than MOLGEN) through canonical augmentation. surge-ext preserves this efficiency while extending coverage to variable-valence and charged species.
+The 2022 surge publication reports benchmarks for the upstream generator.
+Those results do not establish surge-ext's performance: variable-valence runs
+may require many separate generation passes. No fork-specific comparative
+benchmark is provided here.
 
 ---
 
