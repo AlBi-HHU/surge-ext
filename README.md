@@ -21,11 +21,13 @@ This software was developed in the context of a Bachelor's thesis by Federico Ne
   - [Usage](#usage)
   - [Command-line interface](#command-line-interface)
   - [Variable valence specification](#variable-valence-specification)
+    - [Supported elements and states](#supported-elements-and-states)
+    - [Excluding element states](#excluding-element-states)
   - [Variable-valence enumeration model](#variable-valence-enumeration-model)
   - [Comparison to upstream surge](#comparison-to-upstream-surge)
   - [Roadmap](#roadmap)
   - [Related tools and ecosystem](#related-tools-and-ecosystem)
-    - [Open-source structure generators](#open-source-structure-generators)
+    - [Related structure-generation tools](#related-structure-generation-tools)
     - [Performance context](#performance-context)
   - [References](#references)
   - [Cite this software](#cite-this-software)
@@ -239,6 +241,80 @@ Example:
 ```
 
 Multiple valence variants of the same element may be combined in a single formula.
+
+### Supported elements and states
+
+The built-in table contains **13 elements and 62 states**. Valence is the sum
+of bond orders, including bonds to hydrogen; charge is the signed formal charge.
+Input tokens must match exactly. Without `-V`, bare tokens select the state
+shown below; with `-V`, bare atoms are distributed across allowed states while
+explicit variants remain fixed. Charge modes, exclusions, and structural limits
+still apply.
+
+| Element | Input token | Valence | Charge |
+| :------ | :---------- | :-----: | :----: |
+| **H**   | `H`          | 1 | 0 |
+| **B**   | `B`          | 3 | 0 |
+|         | `B(1.1.2)`   | 1 | -2 |
+|         | `B(2.1.1)`   | 2 | -1 |
+| **C**   | `C`          | 4 | 0 |
+|         | `C(1.1.1)`   | 1 | -1 |
+|         | `C(1.1.3)`   | 1 | -3 |
+|         | `C(2.0.0)`   | 2 | 0 |
+|         | `C(2.1.2)`   | 2 | -2 |
+|         | `C(3.1.1)`   | 3 | -1 |
+|         | `C(3.2.1)`   | 3 | 1 |
+| **N**   | `N`          | 3 | 0 |
+|         | `N(1.1.2)`   | 1 | -2 |
+|         | `N(2.1.1)`   | 2 | -1 |
+|         | `N(4.2.1)`   | 4 | 1 |
+| **O**   | `O`          | 2 | 0 |
+|         | `O(1.1.1)`   | 1 | -1 |
+|         | `O(3.2.1)`   | 3 | 1 |
+| **F**   | `F`          | 1 | 0 |
+|         | `F(2.2.1)`   | 2 | 1 |
+|         | `F(3.2.2)`   | 3 | 2 |
+|         | `F(4.2.3)`   | 4 | 3 |
+| **Al**  | `Al`         | 3 | 0 |
+| **Si**  | `Si`         | 4 | 0 |
+| **P**   | `P`          | 3 | 0 |
+|         | `P(1.1.2)`   | 1 | -2 |
+|         | `P(2.1.1)`   | 2 | -1 |
+|         | `P(2.1.3)`   | 2 | -3 |
+|         | `P(3.1.2)`   | 3 | -2 |
+|         | `P(4.2.1)`   | 4 | 1 |
+|         | `P(4.1.1)`   | 4 | -1 |
+|         | `P(5.0.0)`   | 5 | 0 |
+| **S**   | `S`          | 2 | 0 |
+|         | `S(1.1.1)`   | 1 | -1 |
+|         | `S(2.1.2)`   | 2 | -2 |
+|         | `S(3.2.1)`   | 3 | 1 |
+|         | `S(3.1.1)`   | 3 | -1 |
+|         | `S(3.1.3)`   | 3 | -3 |
+|         | `S(4.0.0)`   | 4 | 0 |
+|         | `S(4.2.2)`   | 4 | 2 |
+|         | `S(4.1.2)`   | 4 | -2 |
+|         | `S(5.2.1)`   | 5 | 1 |
+|         | `S(5.1.1)`   | 5 | -1 |
+|         | `S(6.0.0)`   | 6 | 0 |
+| **Cl**  | `Cl`         | 1 | 0 |
+|         | `Cl(2.2.1)`  | 2 | 1 |
+|         | `Cl(2.1.1)`  | 2 | -1 |
+|         | `Cl(3.0.0)`  | 3 | 0 |
+|         | `Cl(3.2.2)`  | 3 | 2 |
+|         | `Cl(3.1.2)`  | 3 | -2 |
+|         | `Cl(4.2.3)`  | 4 | 3 |
+|         | `Cl(4.2.1)`  | 4 | 1 |
+|         | `Cl(4.1.1)`  | 4 | -1 |
+|         | `Cl(4.1.3)`  | 4 | -3 |
+|         | `Cl(5.2.2)`  | 5 | 2 |
+|         | `Cl(5.0.0)`  | 5 | 0 |
+|         | `Cl(5.1.2)`  | 5 | -2 |
+|         | `Cl(6.2.1)`  | 6 | 1 |
+|         | `Cl(6.1.1)`  | 6 | -1 |
+|         | `Cl(7.0.0)`  | 7 | 0 |
+| **Br**  | `Br`         | 1 | 0 |
+| **I**   | `I`          | 1 | 0 |
 
 ### Excluding element states
 
