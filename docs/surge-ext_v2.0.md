@@ -199,6 +199,17 @@ surge-ext supports the following elements with their variable valence and charge
 
 ## 5. New Command-Line Options
 
+### Coordination and degree defaults
+
+`-c#` (distinct neighbours including hydrogen) and `-d#` (distinct non-hydrogen
+neighbours) both default to **6** in surge-ext. Both remain adjustable; use
+`-c4 -d4` for the previous limits. Element-state constraints still apply, and
+coordination above 4 is allowed only without hydrogen neighbours.
+
+```bash
+surge-ext -S 'S(6.0.0)F6'
+```
+
 ### `-V` — Enable variable valences
 
 Activates variable valence enumeration. Allows elements to have multiple valence states in a single run.

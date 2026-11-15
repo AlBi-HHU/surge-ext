@@ -55,8 +55,8 @@
 "  -b    Only rings of even length (same as only cycles of even length)\n" \
 "  -T    Disallow triple bonds\n" \
 "  -P    Require planarity\n" \
-"  -d#   Maximum degree not counting bond multiplicity or hydrogens (default 4)\n" \
-"  -c#   Maximum coordination number (default 4). This is the maximum number\n" \
+"  -d#   Maximum degree not counting bond multiplicity or hydrogens (default 6)\n" \
+"  -c#   Maximum coordination number (default 6). This is the maximum number\n" \
 "         of distinct atoms (including H) that an atom can be bonded to\n" \
 "         Coordination number > 4 is only allowed if no neighbours are H\n" \
 "  -B#,...,# Specify sets of substructures to avoid (details in manual)\n" \

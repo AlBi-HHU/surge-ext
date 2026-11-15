@@ -199,12 +199,19 @@ Selected options:
 - `-Z` Enumerate zwitterions (requires `-V`)
 - `-I` Allow ions (requires `-V`)
 - `-j#` Parallel valence splits
+- `-c#` Maximum distinct neighbours including hydrogen (default 6)
+- `-d#` Maximum distinct non-hydrogen neighbours (default 6)
 - `-Xstate` Exclude an exact element state (repeatable)
 - `-Ffile` Read excluded states from a file (repeatable)
 - `-P` Enforce planarity
 - `-o` Output file
 
 A full description of all constraints and structural filters is provided in the manual.
+
+Both limits can still be overridden, for example with `-c4 -d4` to restore the
+previous limits. The defaults allow six-coordinate structures such as
+`'S(6.0.0)F6'` without additional flags; allowed element states and the restriction
+on hydrogen neighbours above coordination 4 still apply.
 
 ---
 
