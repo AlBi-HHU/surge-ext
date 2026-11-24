@@ -4,7 +4,7 @@
 
 #include "element.h"
 
-#include <ctype.h>
+#include  <ctype.h> 
 
 #include "gtools.h"
 #include "utils.h"
@@ -33,9 +33,7 @@ Element element[MAXELEMENTS] =
     {"B(1.1.2)", "B", false, 1, 0, 1, 2, -2},
     {"B(2.1.1)", "B", false, 2, 0, 2, 3, -1},
     {"C", "C", true, 4, 0, 4, 11, 0},
-    {"C(1.1.1)", "C", true, 1, 0, 1, 5, -1},
     {"C(1.1.3)", "C", true, 1, 0, 1, 6, -3},
-    {"C(2.0.0)", "C", true, 2, 0, 2, 7, 0},
     {"C(2.1.2)", "C", true, 2, 0, 2, 8, -2},
     {"C(3.2.1)", "C", true, 3, 0, 3, 9, 1},
     {"C(3.1.1)", "C", true, 3, 0, 3, 10, -1},
