@@ -24,7 +24,7 @@ for elem in ["H", "B", "C", "N", "O", "F", "P", "S", "Cl"]:
         lp_values = [0]
 
     elif p == 2:
-         # Second Period: no more than octet (bonds + lp <= 4), can form 1 to 4 bonds 
+          # Second Period: no more than octet (bonds + lp <= 4), can form 1 to 4 bonds  
         # Can have 3 pairs (bonds + lp == 3) due to sextet rule for B and C
         bond_values = range(1, 5)
         lp_values = range(0, 5)
@@ -39,12 +39,12 @@ for elem in ["H", "B", "C", "N", "O", "F", "P", "S", "Cl"]:
 
     for bos in bond_values:
         for lp in lp_values:
-             # Second Period: no more than octet (bonds + lp <= 4) 
+              # Second Period: no more than octet (bonds + lp <= 4) 
             if p == 2 and (bos + lp) > 4:
                 continue
 
             # Electron sextet rule for B and C: can have 3 pairs (bonds + lp == 3)
-            if p == 2 and elem in {"B", "C"} and (bos + lp) == 3:
+            if p == 2 and elem in {"B"} and (bos + lp) == 3: # if C is allowed to have 3 bonds only, use 'elem in {"B", "C"}' instead of 'elem in {"B"}'
                 pass  # explicitly allow
 
             # Otherwise in Period 2: at least octet (bonds + lp == 4)
