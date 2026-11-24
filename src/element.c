@@ -4,7 +4,7 @@
 
 #include "element.h"
 
-#include  <ctype.h> 
+#include       <ctype.h>      
 
 #include "gtools.h"
 #include "utils.h"
@@ -33,7 +33,9 @@ Element element[MAXELEMENTS] =
     {"B(1.1.2)", "B", false, 1, 0, 1, 2, -2},
     {"B(2.1.1)", "B", false, 2, 0, 2, 3, -1},
     {"C", "C", true, 4, 0, 4, 11, 0},
+    //{"C(1.1.1)", "C", true, 1, 0, 1, 5, -1},
     {"C(1.1.3)", "C", true, 1, 0, 1, 6, -3},
+    //{"C(2.0.0)", "C", true, 2, 0, 2, 7, 0},
     {"C(2.1.2)", "C", true, 2, 0, 2, 8, -2},
     {"C(3.2.1)", "C", true, 3, 0, 3, 9, 1},
     {"C(3.1.1)", "C", true, 3, 0, 3, 10, -1},
@@ -84,22 +86,27 @@ Element element[MAXELEMENTS] =
     {"Cl(6.2.1)", "Cl", false, 6, 0, 6, 56, 1},
     {"Cl(6.1.1)", "Cl", false, 6, 0, 6, 57, -1},
     {"Cl(7.0.0)", "Cl", false, 7, 0, 7, 58, 0},
-    { "Br","Br",true,  1,0,1,  7 , 0},
-    { "I", "I", true,  1,0,1,  8 , 0},
-    { "Si","Si",false, 4,0,4, 14 , 0},
+    {"Si", "Si", false, 4, 0, 4, 14 , 0},
+    {"Si", "Si", false, 4, 0, 4, 59, 0},
+    {"Si(1.1.3)", "Si", false, 1, 0, 1, 60, -3},
+    {"Si(2.1.2)", "Si", false, 2, 0, 2, 61, -2},
+    {"Si(3.2.1)", "Si", false, 3, 0, 3, 62, 1},
+    {"Si(3.1.1)", "Si", false, 3, 0, 3, 63, -1},
     {"Al", "Al",false, 3,0,3, 15 , 0},
-    { NULL,NULL,false, 0,0,0, 0  , 0}
+    {"Al(1.1.2)", "Al", false, 1, 0, 1, 64, -2},
+    {"Al(2.1.1)", "Al", false, 2, 0, 2, 65, -1},
+    { NULL, NULL, false, 0, 0, 0, 0, 0}
 };
 
 int elementindex(SurgeCtx *ctx, char *inputname)
 {
     int i;
 
-    for (i = 0; i < FM.numelements; ++i)
+    for (i = 0 ; i < FM. numelements; ++i)
         if (strcmp(element[i].inputname,inputname) == 0)
             break;
 
-    if (i < FM.numelements) return i;
+    if (  i < FM. numelements) return i;
     else
     {
         fprintf(stderr,">E Unknown element %s\n",inputname);
@@ -120,7 +127,7 @@ void addelement(SurgeCtx *ctx, char *inputname, char *name, int valence, int max
     if (inputname == NULL || valence <= 0)
         surge_fatal(">E invalid parameters in addelement()\n");
 
-    for (i = 0; i < FM.numelements; ++i)
+    for (i = 0 ; i < FM. numelements; ++i)
     {
         if (strcmp(element[i].inputname,inputname) == 0)
         {
